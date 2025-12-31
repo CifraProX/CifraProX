@@ -1294,7 +1294,7 @@ const app = {
 
             // Auto-scroll to Strumming/Content if at top
             const diff = window.scrollY; // Current scroll
-            if (diff < 100) { // Only if user is at the very top
+            if (diff < 300) { // Only if user is near the top
                 setTimeout(() => {
                     const strum = document.getElementById('view-strumming-container');
                     const content = document.getElementById('view-content');
@@ -1306,7 +1306,7 @@ const app = {
                         const targetPos = target.offsetTop - headerHeight - 20;
                         window.scrollTo({ top: targetPos, behavior: 'smooth' });
                     }
-                }, 150); // Delay to ensure mobile browser is ready
+                }, 300); // Increased delay for mobile robustness
             }
 
             requestAnimationFrame(app.scrollLoop);

@@ -669,7 +669,7 @@ textarea {
     background: #1e293b;
     color: white;
     padding: 6px 14px;
-    border-radius: 20px;
+    border-radius: 999px;
     font-size: 0.85rem;
     font-weight: 600;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
