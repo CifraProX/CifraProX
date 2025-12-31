@@ -62,7 +62,8 @@ const Chords = {
         if (data.bar) {
             const barFret = 1;
             const y = margin + (barFret * fretGap) - (fretGap / 2);
-            if (!data.noBarLine) {
+            const showBarLine = data.noBarLine !== true && data.noBarLine !== "true";
+            if (showBarLine) {
                 svg += `<rect x="${margin - 2}" y="${y - 4}" width="${width - 2 * margin + 4}" height="8" rx="2" fill="#059669"/>`;
             }
             svg += `<text x="0" y="${y + 4}" fill="#4b5563" font-size="11" font-family="sans-serif" font-weight="bold">${data.bar}ª</text>`;
@@ -79,7 +80,8 @@ const Chords = {
                 svg += `<circle cx="${x}" cy="${margin - 7}" r="3" stroke="#059669" stroke-width="1.5" fill="none"/>`;
             } else {
                 // Se noBarLine for true, desenhamos o dedo mesmo que ele esteja na casa da "pestana"
-                if (data.bar && fret === data.bar && !data.noBarLine) return;
+                const noBar = data.noBarLine === true || data.noBarLine === "true";
+                if (data.bar && fret === data.bar && !noBar) return;
 
                 let displayFret = fret;
                 if (data.bar) displayFret = fret - data.bar + 1;

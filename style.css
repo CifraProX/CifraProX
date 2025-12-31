@@ -326,6 +326,50 @@ main {
     z-index: 2;
 }
 
+.chord-card-actions {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    gap: 8px;
+    opacity: 0;
+    transform: translateY(-5px);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 10;
+}
+
+.chord-card:hover .chord-card-actions {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.btn-chord-action {
+    background: white;
+    border: none;
+    color: var(--text-color);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 14px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    transition: all 0.2s;
+}
+
+.btn-chord-action:hover {
+    background: var(--primary-color);
+    color: white;
+    transform: scale(1.1);
+}
+
+.btn-chord-action.btn-chord-delete:hover {
+    background: var(--danger-color);
+    color: white;
+}
+
 .genre-icon-bg {
     position: absolute;
     bottom: -10px;
@@ -625,39 +669,6 @@ textarea {
     background: var(--primary-color);
     color: white;
     border-color: var(--primary-color);
-}
-
-.btn-chord-delete {
-    position: absolute;
-    top: -5px;
-    right: -5px;
-    background: white;
-    border: 1px solid var(--border-color);
-    color: var(--danger-color);
-    cursor: pointer;
-    font-size: 0.9rem;
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: var(--shadow-sm);
-    opacity: 0.6;
-    transition: all 0.2s;
-    z-index: 10;
-}
-
-.chord-card:hover .btn-chord-delete {
-    opacity: 1;
-    transform: scale(1.1);
-}
-
-.btn-chord-delete:hover {
-    background: var(--danger-color);
-    color: white;
-    border-color: var(--danger-color);
-    transform: scale(1.2) !important;
 }
 
 #loop-countdown {

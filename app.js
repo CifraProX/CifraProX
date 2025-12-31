@@ -429,11 +429,13 @@ const app = {
                 // Custom logic for Chord Creator: grab values before they disappear from DOM
                 const nameInp = document.getElementById('new-chord-name');
                 const barInp = document.getElementById('chord-bar');
+                const noBarInp = document.getElementById('chord-no-bar');
 
                 if (nameInp && barInp) {
                     cleanup({
                         name: nameInp.value,
-                        bar: parseInt(barInp.value)
+                        bar: parseInt(barInp.value),
+                        noBar: noBarInp ? noBarInp.checked : false
                     });
                 } else {
                     cleanup(true);
@@ -1073,13 +1075,24 @@ const app = {
                 </div>`;
         }
 
-        // Botão de excluir (apenas se logado)
-        const deleteBtn = app.state.user ? `
-            <button class="btn-chord-delete" title="Excluir Acorde/Variação" onclick="event.stopPropagation(); app.confirmDeleteChord('${chordName}')">×</button>
-        ` : '';
+        // Botões de ação (apenas se logado)
+        let actionsBtn = '';
+        const defaultIndex = 0;
+        if (app.state.user) {
+            actionsBtn = `
+                <div class="chord-card-actions">
+                    <button class="btn-chord-action" title="Editar Acorde/Variação" onclick="event.stopPropagation(); app.openChordCreator('${chordName.replace(/'/g, "\\'")}', ${defaultIndex})">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                    </button>
+                    <button class="btn-chord-action btn-chord-delete" title="Excluir Acorde/Variação" onclick="event.stopPropagation(); app.confirmDeleteChord('${chordName}')">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
+                </div>
+            `;
+        }
 
         card.innerHTML = `
-            ${deleteBtn}
+            ${actionsBtn}
             <div class="chord-name">${cleanName}</div>
             <div class="chord-svg-container">${svg}</div>
             ${navHtml}
@@ -1153,6 +1166,12 @@ const app = {
         const newSvg = Chords.render(chordName, index);
         const svgContainer = card.querySelector('.chord-svg-container');
         if (svgContainer) svgContainer.innerHTML = newSvg;
+
+        // Sincronizar botão de edição com o novo índice
+        const editBtn = card.querySelector('.btn-chord-action[title*="Editar"]');
+        if (editBtn) {
+            editBtn.setAttribute('onclick', `event.stopPropagation(); app.openChordCreator('${chordName.replace(/'/g, "\\'")}', ${index})`);
+        }
     },
 
     loadLibrary: () => {
@@ -1374,12 +1393,29 @@ const app = {
     },
 
     // --- CHORD CREATOR ---
-    openChordCreator: async (prefilledName = '') => {
-        const chordData = {
+    openChordCreator: async (prefilledName = '', editIndex = -1) => {
+        let chordData = {
             name: prefilledName,
             p: [100, 100, 100, 100, 100, 100], // 100 = nada definido
-            bar: 0
+            bar: 0,
+            noBarLine: false
         };
+
+        // Se estiver editando, carregar dados existentes
+        if (editIndex !== -1 && Chords.dict[prefilledName]) {
+            const variations = Chords.dict[prefilledName];
+            const v = Array.isArray(variations) ? variations[editIndex] : variations;
+            if (v) {
+                // Converter p absoluta para p relativa ao grid (1-5)
+                const bar = v.bar || 0;
+                chordData.bar = bar;
+                chordData.noBarLine = v.noBarLine || false;
+                chordData.p = v.p.map(val => {
+                    if (val <= 0) return val; // 0 ou -1
+                    return val - (bar > 0 ? bar - 1 : 0);
+                });
+            }
+        }
 
         const renderFretboard = (targetId) => {
             const container = document.getElementById(targetId);
@@ -1424,9 +1460,12 @@ const app = {
             });
 
             // Barre (Pestana)
+            const noBarLine = document.getElementById('chord-no-bar')?.checked;
             if (barVal > 0) {
                 const y = m + (1 * fGap) - (fGap / 2);
-                svgStr += `<rect x="${m - 3}" y="${y - 6}" width="${w - 2 * m + 6}" height="12" rx="3" fill="#059669"/>`;
+                if (!noBarLine) {
+                    svgStr += `<rect x="${m - 3}" y="${y - 6}" width="${w - 2 * m + 6}" height="12" rx="3" fill="#059669"/>`;
+                }
                 svgStr += `<text x="0" y="${y + 6}" fill="#4b5563" font-size="14" font-family="sans-serif" font-weight="bold">${barVal}ª</text>`;
             }
 
@@ -1435,8 +1474,8 @@ const app = {
                 if (fret > 0 && fret <= 5) {
                     const x = m + sIndex * sGap;
                     const y = m + (fret * fGap) - (fGap / 2);
-                    // Não desenha se houver pestana na casa 1 (simplificação visual do card)
-                    if (barVal > 0 && fret === 1) return;
+                    // Não desenha se houver pestana na casa 1 (simplificação visual do card), A MENOS que noBarLine esteja marcado
+                    if (barVal > 0 && fret === 1 && !noBarLine) return;
                     svgStr += `<circle cx="${x}" cy="${y}" r="7.5" fill="#059669"/>`;
                 }
             });
@@ -1482,11 +1521,19 @@ const app = {
                 <input type="text" id="new-chord-name" class="modal-input" placeholder="Nome do Acorde (ex: G7M)" style="margin-bottom:0" value="${chordData.name}">
                 <div id="chord-creator-fretboard"></div>
                 <div class="editor-controls">
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <label style="margin:0">Casa da Pestana (0=sem):</label>
-                        <input type="number" id="chord-bar" value="0" min="0" max="15" style="width:60px; padding:5px; border-radius:4px; border:1px solid var(--border-color)">
+                    <div style="display:flex; flex-direction:column; gap:10px;">
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <label style="margin:0">Casa da Pestana (0=sem):</label>
+                            <input type="number" id="chord-bar" value="${chordData.bar}" min="0" max="15" style="width:60px; padding:5px; border-radius:4px; border:1px solid var(--border-color)">
+                        </div>
+                        <div style="display:flex; align-items:center; gap:10px; background: rgba(0,0,0,0.02); padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border-color);">
+                            <input type="checkbox" id="chord-no-bar" style="width: auto; margin: 0;" ${chordData.noBarLine ? 'checked' : ''}>
+                            <label for="chord-no-bar" style="margin: 0; cursor: pointer; color: var(--text-color); font-size: 0.9rem;">
+                                Apenas número da casa (sem linha da pestana)
+                            </label>
+                        </div>
                     </div>
-                    <p style="font-size:0.8rem; color:var(--text-muted)">Clique nas casas para colocar os dedos. Na primeira linha, alterne entre Aberta (O) e Abafada (X).</p>
+                    <p style="font-size:0.8rem; color:var(--text-muted); margin-top: 10px;">Clique nas casas para colocar os dedos. Na primeira linha, alterne entre Aberta (O) e Abafada (X).</p>
                 </div>
             </div>
         `;
@@ -1501,12 +1548,18 @@ const app = {
         // Initialize board immediately
         renderFretboard('chord-creator-fretboard');
 
-        // Escuta mudanças no input de pestana para atualizar visual
+        // Escuta mudanças nos controles para atualizar visual
         requestAnimationFrame(() => {
             const barInput = document.getElementById('chord-bar');
+            const noBarCheck = document.getElementById('chord-no-bar');
             if (barInput) {
                 barInput.oninput = () => {
                     chordData.bar = parseInt(barInput.value) || 0;
+                    renderFretboard('chord-creator-fretboard');
+                };
+            }
+            if (noBarCheck) {
+                noBarCheck.onchange = () => {
                     renderFretboard('chord-creator-fretboard');
                 };
             }
@@ -1517,6 +1570,7 @@ const app = {
         if (res) {
             const name = res.name || '';
             const bar = res.bar || 0;
+            const noBarLine = res.noBar || false;
 
             if (!name) {
                 app.showToast('Dê um nome ao acorde!');
@@ -1531,14 +1585,24 @@ const app = {
             const adjustedP = finalP.map(v => (v > 0) ? (v + (bar > 0 ? bar - 1 : 0)) : v);
 
             const newVariation = { p: adjustedP };
-            if (bar > 0) newVariation.bar = bar;
+
+            if (bar > 0) {
+                newVariation.bar = bar;
+                newVariation.noBarLine = !!noBarLine; // Garante booleano explícito
+            }
 
             try {
                 // Check if exists
                 let variations = Chords.dict[name] || [];
                 if (!Array.isArray(variations)) variations = [variations];
 
-                variations.push(newVariation);
+                if (editIndex !== -1 && variations[editIndex]) {
+                    // Substituir existente se estiver em modo edit
+                    variations[editIndex] = newVariation;
+                } else {
+                    // Adicionar nova variação
+                    variations.push(newVariation);
+                }
 
                 await app.db.collection('custom_chords').doc(app.getChordId(name)).set({
                     name: name,
