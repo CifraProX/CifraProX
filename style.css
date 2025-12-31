@@ -893,79 +893,17 @@ textarea {
     margin-bottom: 5px;
 }
 
-/* Estilo para conteudo da cifra (Texto + Acordes) - Fix Mobile v15 */
+/* Estilo para conteudo da cifra (Texto + Acordes) - Reverted v17 */
 #view-content {
-    /* Smart Formatting Rule: v15 */
-    font-family: 'Roboto Mono', 'Courier New', monospace !important;
-    white-space: normal;
-    /* Deixa o browser quebrar as linhas (Smart Blocks) */
+    white-space: pre-wrap;
+    /* Garante quebras de linha normais */
+    font-family: inherit;
+    /* Volta a fonte padrão do site (Inter) */
     line-height: 1.6;
     font-size: 15px;
     color: var(--text-color);
-    overflow-x: hidden;
     width: 100%;
     margin-bottom: 2rem;
-}
-
-/* Container de uma linha (flex para garantir quebras limpas) */
-.smart-line {
-    display: block;
-    margin-bottom: 0.5rem;
-    /* Espaço entre frases */
-    width: 100%;
-}
-
-.chord-pair {
-    display: inline-block;
-    vertical-align: top;
-    margin-right: 0;
-    /* O espaçamento vem do texto lírico dentro dele */
-}
-
-.chord-line {
-    display: block;
-    height: 1.4em;
-    /* Altura reservada para o acorde */
-    color: var(--primary-color);
-    font-weight: bold;
-    margin-bottom: -0.2em;
-    /* Aproxima da letra */
-}
-
-.lyric-line {
-    display: inline;
-    /* O texto flui */
-    white-space: pre-wrap;
-    /* Preserva espaços internos da string capturada */
-}
-
-.lyric-only {
-    display: inline;
-    white-space: pre-wrap;
-    vertical-align: bottom;
-    /* Alinha com a base da letra do par */
-    /* Precisamos compensar a altura do acorde ausente? 
-       Não, lyric-only aparece ENTRE pares. 
-       Se a linha começa com lyric-only, ela deve ter padding-top? */
-    padding-top: 1.2em;
-    /* Simula a altura do acorde fantasma se estiver misturado na mesma linha visual */
-    /* Melhor: display inline-block com vertical-align top também? */
-    display: inline-block;
-    vertical-align: top;
-    padding-top: 1.2em;
-}
-
-@media (max-width: 600px) {
-    #view-content {
-        font-size: 14px;
-        /* Pode ser maior agora! */
-    }
-}
-
-@media (max-width: 600px) {
-    #view-content {
-        font-size: 11px;
-        letter-spacing: -0.3px;
-        line-height: 1.4;
-    }
+    overflow-x: auto;
+    /* Fallback para evitar quebras se a palavra for muito longa */
 }

@@ -513,11 +513,8 @@ const app = {
             }
 
             // --- Render Content & Loops ---
-            let rawContent = data.content;
-            rawContent = rawContent.replace(/\r\n/g, '\n');
-
-            // Primeiro processamos a lógica Smart (Juntar Acordes + Letras)
-            let contentHtml = app.processSmartChords(rawContent);
+            let contentHtml = data.content;
+            contentHtml = contentHtml.replace(/\r\n/g, '\n');
 
             // Loop Markers - Syntax: [|desktop|tablet|mobile|] or [|time|]
             contentHtml = contentHtml.replace(/\[\|(\d*)(?:\|(\d*))?(?:\|(\d*))?\|?\]/g, (match, d1, d2, d3) => {
@@ -545,10 +542,9 @@ const app = {
                     style="height: 1px; width: 100%; opacity: 0; pointer-events: none; margin: 0;"></div>`;
             });
 
-            // Clean up left-over chord brackets that processNormalLine might have skipped or inline chords
+            // Standard Chord Replacement (Regex) - Reverting Smart Logic
             contentHtml = contentHtml.replace(/\[([^\]]+)\]/g, (match, chordName) => {
                 if (chordName.startsWith('|') || chordName.startsWith('.')) return match;
-                if (chordName.includes('<')) return match; // Já é HTML processado
                 const cleanName = chordName.replace(/[\[\]\*]/g, '');
                 return `<b class="interactive-chord" onclick="app.highlightChord('${cleanName}')">${cleanName}</b>`;
             });
@@ -607,128 +603,15 @@ const app = {
         }
     },
 
-    processSmartChords: (content) => {
-        const lines = content.split('\n');
-        let outputHtml = '';
 
-        // Helper to check if a line is a "Chord Line" (mostly chords/spaces)
-        const isChordLine = (line) => {
-            const trimmed = line.trim();
-            if (!trimmed) return false;
-            // Ignora linhas de cabeçalho [Intro], [Refrão] etc se desejado, 
-            // mas aqui vamos focar apenas na estrutura [Acorde]
-            // Se tiver muitas letras que não são entre colchetes, é letra
-            const outsideBrackets = line.replace(/\[.*?\]/g, '').trim();
-            // Se o que sobrou for vazio ou muito curto em relação ao tamanho da linha, é linha de acordes
-            return outsideBrackets.length === 0;
-        };
-
-        for (let i = 0; i < lines.length; i++) {
-            const currentLine = lines[i];
-
-            // Verifica se é linha de acordes e se tem uma próxima linha de letra
-            if (isChordLine(currentLine) && i + 1 < lines.length) {
-                const nextLine = lines[i + 1];
-
-                // Se a próxima linha também for acorde ou vazia, processa a atual como normal
-                if (isChordLine(nextLine) || !nextLine.trim()) {
-                    outputHtml += app.processLineNormal(currentLine) + '\n';
-                    continue;
-                }
-
-                // MAGIC: Merge Chord Line with Lyric Line
-                let mergedLine = '';
-
-                // Encontrar posições dos acordes
-                const chords = [];
-                const regex = /\[(.*?)\]/g;
-                let match;
-                while ((match = regex.exec(currentLine)) !== null) {
-                    // Ignora markers de loop
-                    if (match[1].startsWith('|') || match[1].startsWith('.')) continue; // Markers serão processados depois
-                    chords.push({
-                        name: match[1],
-                        index: match.index,
-                        endIndex: match.index + match[0].length
-                    });
-                }
-
-                // Se não achou acordes (ex: só espaços), pula
-                if (chords.length === 0) {
-                    outputHtml += app.processLineNormal(currentLine) + '\n';
-                    continue;
-                }
-
-                // Construir a linha "Smart"
-                // Estratégia: Cortar a nextLine em pedaços baseados nos índices dos acordes
-
-                let lastLyrixIndex = 0;
-
-                chords.forEach((chord, idx) => {
-                    // Texto lírico antes deste acorde (desde o último acorde)
-                    // Onde este termo começa na linha de baixo?
-                    // Tentaremos alinhar com o índice visual.
-
-                    // Pega o trecho de letra até a posição deste acorde
-                    // Mas cuidado, o acorde deve "puxar" a palavra que está embaixo dele.
-
-                    // Achar a palavra que está "sob" o acorde.
-                    // O índice do acorde é chord.index.
-                    // Vamos avançar o lastLyrixIndex até chegar perto do chord.index
-
-                    if (chord.index > lastLyrixIndex) {
-                        const preText = nextLine.substring(lastLyrixIndex, chord.index);
-                        mergedLine += `<span class="lyric-only">${preText}</span>`;
-                        lastLyrixIndex = chord.index;
-                    }
-
-                    // Agora estamos na posição do acorde. 
-                    // Vamos pegar a palavra inteira que está aqui ou o resto da frase se for longo?
-                    // Smart Wrap: O bloco encerra na próxima palavra ou espaço?
-                    // Vamos pegar até o próximo acorde ou fim da linha.
-
-                    let sliceEnd;
-                    if (idx + 1 < chords.length) {
-                        sliceEnd = chords[idx + 1].index;
-                    } else {
-                        sliceEnd = nextLine.length;
-                    }
-
-                    // Garante que pegamos pelo menos um pedaço
-                    if (sliceEnd < lastLyrixIndex) sliceEnd = lastLyrixIndex;
-
-                    const lyricsPart = nextLine.substring(lastLyrixIndex, sliceEnd);
-
-                    const cleanName = chord.name.replace(/[\[\]\*]/g, '');
-                    const chordHtml = `<b class="interactive-chord" onclick="event.stopPropagation(); app.highlightChord('${cleanName}')">${cleanName}</b>`;
-
-                    mergedLine += `<span class="chord-pair"><span class="chord-line">${chordHtml}</span><span class="lyric-line">${lyricsPart}</span></span>`;
-
-                    lastLyrixIndex = sliceEnd;
-                });
-
-                // Resto da linha se houver
-                if (lastLyrixIndex < nextLine.length) {
-                    mergedLine += `<span class="lyric-only">${nextLine.substring(lastLyrixIndex)}</span>`;
-                }
-
-                outputHtml += `<div class="smart-line">${mergedLine}</div>`;
-                i++; // Pula a próxima linha pois já foi merged
-            } else {
-                // Linha normal (Letra sozinha ou Acorde sozinho sem par)
-                outputHtml += app.processLineNormal(currentLine) + '\n';
-            }
-        }
-        return outputHtml;
-    },
-
-    processLineNormal: (line) => {
-        // Apenas escape básico, os replacers globais do loadCifra lidarão com os acordes restantes
-        return line;
-    },
 
     autoWrapChords: () => {
         const textarea = document.getElementById('edit-content');
+        if (!textarea) return;
+
+        const content = textarea.value;
+        const lines = content.split('\n');
+
         // Inclui suporte a: +, -, (), º, acidentes no baixo, extensões numéricas.
         const chordPattern = /\b([A-G][b#]?(?:maj|min|m|M|aug|dim|sus|add)?\d*[\+\-]?º?(?:[b#]\d*)?(?:\([^)]+\))?(?:\/[A-G][b#]?[\+\-]?\d*)?)(?=\s|$)/g;
 
