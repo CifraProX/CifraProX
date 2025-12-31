@@ -1304,7 +1304,7 @@ const app = {
                         // Scroll com offset para não colar no header
                         const headerHeight = document.querySelector('header').offsetHeight || 80;
                         const targetPos = target.offsetTop - headerHeight - 20;
-                        window.scrollTo({ top: targetPos, behavior: 'smooth' });
+                        window.scrollTo({ top: targetPos, behavior: 'auto' });
                     }
                 }, 300); // Increased delay for mobile robustness
             }

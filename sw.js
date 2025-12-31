@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cifraprox-v24';
+const CACHE_NAME = 'cifraprox-v25';
 const ASSETS = [
     './',
     './index.html',
