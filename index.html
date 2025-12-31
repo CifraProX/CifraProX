@@ -384,8 +384,38 @@
     <!-- Container para Modais Premium -->
     <div id="modal-root"></div>
 
-    <script src="chords.js?v=12"></script>
-    <script src="app.js?v=12"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(registration => {
+                        console.log('SW Registered:', registration);
+
+                        // Check for updates
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    // New version available!
+                                    // Assuming skipping waiting is handled in SW, this isn't strictly needed for reload but good for UI
+                                }
+                            });
+                        });
+                    })
+                    .catch(err => console.log('SW Registration failed:', err));
+
+                // Reload page when new SW takes control
+                let refreshing;
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    if (refreshing) return;
+                    window.location.reload();
+                    refreshing = true;
+                });
+            });
+        }
+    </script>
+    <script src="chords.js?v=13"></script>
+    <script src="app.js?v=13"></script>
 </body>
 
 </html>
