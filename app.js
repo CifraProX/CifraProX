@@ -1291,6 +1291,22 @@ const app = {
             iconPlay.style.display = 'none';
             iconPause.style.display = 'block';
             btn.classList.add('btn-primary');
+
+            // Auto-scroll to Strumming/Content if at top
+            const diff = window.scrollY; // Current scroll
+            if (diff < 100) { // Only if user is at the very top
+                const strum = document.getElementById('view-strumming-container');
+                const content = document.getElementById('view-content');
+                const target = (strum && strum.style.display !== 'none') ? strum : content;
+
+                if (target) {
+                    // Scroll com offset para não colar no header
+                    const headerHeight = document.querySelector('header').offsetHeight || 80;
+                    const targetPos = target.offsetTop - headerHeight - 20;
+                    window.scrollTo({ top: targetPos, behavior: 'smooth' });
+                }
+            }
+
             requestAnimationFrame(app.scrollLoop);
         } else {
             iconPlay.style.display = 'block';
