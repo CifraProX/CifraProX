@@ -325,7 +325,7 @@
                     style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; height: 60vh;">
                     <!-- Coluna da Esquerda: Editor -->
                     <textarea name="content" id="edit-content"
-                        style="width: 100%; height: 100%; resize: none; font-family: monospace; line-height: 1.5; white-space: pre; border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; overflow-y: auto;"
+                        style="width: 100%; height: 100%; resize: none; font-family: inherit; line-height: 1.5; white-space: pre; border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; overflow-y: auto;"
                         required placeholder="Cole a letra com os acordes entre colchetes, ex: [G] [Am]"
                         oninput="app.updateEditorPreview()" onscroll="app.syncEditorScroll()"></textarea>
 
@@ -416,8 +416,8 @@
             });
         }
     </script>
-    <script src="chords.js?v=21"></script>
-    <script src="app.js?v=21"></script>
+    <script src="chords.js?v=22"></script>
+    <script src="app.js?v=22"></script>
 </body>
 
 </html>
