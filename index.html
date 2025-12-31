@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CifraProX - Suas Cifras</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1a2e25">
+    <link rel="icon" type="image/png" href="logo.png">
+    <link rel="apple-touch-icon" href="logo.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+</head>
+
+<body>
+    <header>
+        <nav>
+            <a href="javascript:void(0)" class="logo" onclick="app.navigate('home')">CifraPro<span
+                    class="metallic-x">X</span></a>
+            <div class="nav-links" id="nav-links">
+                <span style="color:white">Carregando menu...</span>
+            </div>
+        </nav>
+    </header>
+
+
+    <main id="app">
+        <h3 style="text-align:center; padding: 2rem; color: #666;">Carregando sistema...</h3>
+        <script>
+            setTimeout(() => {
+                if (document.querySelector('h3')) {
+                    document.querySelector('h3').innerText = "O Javascript não carregou ou travou.";
+                    document.querySelector('h3').style.color = "red";
+                }
+            }, 5000);
+        </script>
+    </main>
+
+    <!-- Templates -->
+    <template id="view-home">
+        <div class="actions" style="margin-bottom: 2rem; align-items: center;">
+            <div class="filters-container">
+                <div class="search-box">
+                    <input type="text" id="filter-search" placeholder="Pesquisar..." oninput="app.filterCifras()">
+                </div>
+                <select id="filter-genre" class="filter-select" onchange="app.filterCifras()">
+                    <option value="">Gênero</option>
+                    <option value="Sertanejo">Sertanejo</option>
+                    <option value="Rock">Rock</option>
+                    <option value="MPB">MPB</option>
+                    <option value="Acústico">Acústico</option>
+                </select>
+                <select id="filter-capo" class="filter-select" onchange="app.filterCifras()">
+                    <option value="">Capo</option>
+                    <option value="Sem Capo">Sem Capo</option>
+                    <option value="1ª Casa">1ª Casa</option>
+                    <option value="2ª Casa">2ª Casa</option>
+                    <option value="3ª Casa">3ª Casa</option>
+                    <option value="4ª Casa">4ª Casa</option>
+                    <option value="5ª Casa">5ª Casa</option>
+                </select>
+            </div>
+            <button class="btn btn-create" onclick="app.navigate('editor')" id="btn-create"
+                style="display:none; margin-left: auto;">+ Nova</button>
+        </div>
+        <div class="cifra-grid" id="cifra-list">
+            <!-- Cifras here -->
+        </div>
+    </template>
+
+    <template id="view-login">
+        <div class="form-container">
+            <h2 style="margin-bottom: 1.5rem; text-align: center;">Entrar</h2>
+            <form onsubmit="app.login(event)">
+                <div class="input-group">
+                    <label>E-mail</label>
+                    <input type="email" name="email" required placeholder="Seu e-mail">
+                </div>
+                <div class="input-group">
+                    <label>Senha</label>
+                    <input type="password" name="password" required placeholder="Sua senha">
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">Entrar</button>
+            </form>
+        </div>
+    </template>
+
+    <template id="view-library">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 2rem;">
+            <div>
+                <h1>Biblioteca de Acordes</h1>
+                <p style="color: var(--text-muted);">Consulte todos os acordes disponíveis no sistema.</p>
+            </div>
+            <button class="btn btn-create" id="btn-open-creator" onclick="app.openChordCreator()">+ Cadastrar
+                Acorde</button>
+        </div>
+        <div id="library-list" style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
+            <!-- Renderizado via JS -->
+        </div>
+    </template>
+
+    <template id="view-setlists">
+        <h1>Meus Repertórios</h1>
+        <p style="color: var(--text-muted); margin-bottom: 2rem;">Organize suas músicas para shows e ensaios.</p>
+
+        <div id="reorder-section"
+            style="display:none; margin-bottom: 2rem; background: rgba(0,0,0,0.02); padding: 1.5rem; border-radius: 16px; border: 1px dashed var(--border-color);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                <h3 id="reorder-title" style="margin:0; font-size:1.1rem;">Reordenar Músicas</h3>
+                <button class="btn btn-outline" style="padding:0.3rem 0.8rem; font-size:0.8rem;"
+                    onclick="document.getElementById('reorder-section').style.display='none'">Fechar</button>
+            </div>
+            <div id="reorder-list">
+                <!-- Injetado via JS -->
+            </div>
+        </div>
+
+        <div class="cifra-grid" id="setlist-grid">
+            <!-- Renderizado via JS -->
+        </div>
+    </template>
+
+    <template id="view-cifra">
+        <div id="cifra-display">
+            <div class="cifra-header">
+                <div class="cifra-header-info">
+                    <h1 id="view-title" style="margin-bottom: 0.2rem; margin-top: 0;">Título</h1>
+                    <p id="view-artist"
+                        style="margin-bottom: 0.5rem; color: var(--primary-color); font-weight: 500; font-size: 1.2rem; margin-top: 0;">
+                        Artista</p>
+                </div>
+            </div>
+
+            <div id="view-meta"
+                style="font-size: 0.9rem; color: var(--text-muted); display: flex; gap: 1rem; margin-bottom: 2rem;">
+                <span id="view-genre"
+                    style="display:none; background: #e0f2f1; color: #004d40; padding: 2px 8px; border-radius: 4px; font-weight: 500;"></span>
+                <span id="view-capo"
+                    style="display:none; background: #f3e5f5; color: #4a148c; padding: 2px 8px; border-radius: 4px; font-weight: 500;"></span>
+            </div>
+
+            <!-- Chords Gallery -->
+            <div id="view-chords-container" style="display:none; margin-bottom: 2rem;">
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">Acordes:</p>
+                <div id="view-chords-list" style="display: flex; gap: 1rem; flex-wrap: wrap;"></div>
+            </div>
+
+            <!-- Batida Display -->
+            <div id="view-strumming-container"
+                style="display:none; margin-bottom: 2rem; background: var(--card-bg); padding: 1rem; border-radius: 8px; border: 1px dashed var(--border-color);">
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">Batida Sugerida:</p>
+                <div id="view-strumming" style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;"></div>
+            </div>
+
+            <div class="cifra-content" id="view-content"></div>
+
+            <!-- Autoscroll Controls -->
+            <div id="scroll-controls"
+                style="position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; align-items: flex-end; z-index: 100;">
+
+                <div id="loop-countdown" style="display:none;">
+                    Voltando em <span id="loop-seconds">0</span>s...
+                </div>
+
+                <button class="btn btn-primary" id="btn-scroll-toggle" onclick="app.toggleScroll()"
+                    style="width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; padding: 0;">
+                    <svg id="icon-play" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                    </svg>
+                    <svg id="icon-pause" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+                        <rect x="6" y="4" width="4" height="16"></rect>
+                        <rect x="14" y="4" width="4" height="16"></rect>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Setlist Navigation Bar (Hidden by default) -->
+            <div id="setlist-navigator"
+                style="display:none; position: fixed; bottom: 0; left: 0; width: 100%; background: var(--bg-header); padding: 1rem; color: white; border-top: 1px solid rgba(255,255,255,0.1); z-index: 90; backdrop-filter: blur(10px);">
+                <div
+                    style="max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; padding: 0 1rem;">
+                    <button class="btn btn-outline"
+                        style="background: transparent; color: white; border-color: rgba(255,255,255,0.2);"
+                        onclick="app.prevInSetlist()">← Anterior</button>
+                    <div id="setlist-info" style="text-align: center; font-size: 0.9rem;">
+                        <div id="setlist-name" style="font-weight: bold; color: var(--primary-color);">Repertório</div>
+                        <div id="setlist-pos" style="opacity: 0.7;">1 de 10</div>
+                    </div>
+                    <button class="btn btn-outline"
+                        style="background: transparent; color: white; border-color: rgba(255,255,255,0.2);"
+                        onclick="app.nextInSetlist()">Próxima →</button>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <template id="view-editor">
+
+        <form onsubmit="app.saveCifra(event)">
+            <input type="hidden" name="id" id="edit-id">
+            <div class="input-group">
+                <label>Título da Música</label>
+                <input type="text" name="title" id="edit-title" required placeholder="Ex: Legião Urbana">
+            </div>
+            <div class="input-group">
+                <label>Artista / Banda</label>
+                <input type="text" name="artist" id="edit-artist" required placeholder="Ex: Tempo Perdido">
+            </div>
+
+            <div class="input-group"
+                style="display: flex; align-items: center; gap: 0.5rem; background: rgba(0,0,0,0.02); padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border-color);">
+                <input type="checkbox" name="ready" id="edit-ready" style="width: auto; margin: 0;">
+                <label for="edit-ready" style="margin: 0; cursor: pointer; color: var(--text-color); font-weight: 500;">
+                    Cifra Pronta (Visível para todos)
+                </label>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="input-group">
+                    <label>Tom / Capo</label>
+                    <select name="capo" id="edit-capo" style="width:100%; padding:0.5rem;">
+                        <option value="">Sem Capo</option>
+                        <option value="1ª Casa">1ª Casa</option>
+                        <option value="2ª Casa">2ª Casa</option>
+                        <option value="3ª Casa">3ª Casa</option>
+                        <option value="4ª Casa">4ª Casa</option>
+                        <option value="5ª Casa">5ª Casa</option>
+                        <option value="6ª Casa">6ª Casa</option>
+                        <option value="7ª Casa">7ª Casa</option>
+                        <option value="8ª Casa">8ª Casa</option>
+                        <option value="9ª Casa">9ª Casa</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>Gênero Musical</label>
+                    <select name="genre" id="edit-genre" style="width:100%; padding:0.5rem;">
+                        <option value="">Selecione...</option>
+                        <option value="Sertanejo">Sertanejo</option>
+                        <option value="Rock">Rock</option>
+                        <option value="MPB">MPB</option>
+                        <option value="Acústico">Acústico</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="input-group">
+                    <label>Velocidade Mobile (1-100)</label>
+                    <input type="number" name="scrollSpeedMobile" id="edit-scrollSpeedMobile" min="1" max="100" required
+                        style="width: 100px;">
+                </div>
+                <div class="input-group">
+                    <label>Velocidade Tablet (1-100)</label>
+                    <input type="number" name="scrollSpeed" id="edit-scrollSpeed" min="1" max="100" required
+                        style="width: 100px;">
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label>Batida / Ritmo</label>
+                <div class="strumming-controls"
+                    style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem; flex-wrap: wrap;">
+                    <button type="button" class="btn btn-outline btn-icon"
+                        onclick="app.addStrum('batida circular.svg', 'C')" title="Circular"><img
+                            src="icons/batida circular.svg"></button>
+                    <button type="button" class="btn btn-outline btn-icon"
+                        onclick="app.addStrum('batida para baixo.svg', 'D')" title="Baixo"><img
+                            src="icons/batida para baixo.svg"></button>
+                    <button type="button" class="btn btn-outline btn-icon"
+                        onclick="app.addStrum('batida para cima.svg', 'U')" title="Cima"><img
+                            src="icons/batida para cima.svg"></button>
+                    <button type="button" class="btn btn-outline btn-icon" onclick="app.addStrum('abafado.svg', 'X')"
+                        title="Abafado"><img src="icons/abafado.svg"></button>
+                    <button type="button" class="btn btn-outline btn-icon"
+                        onclick="app.addStrum('abafado para baixo.svg', 'd')" title="Abafado Baixo"><img
+                            src="icons/abafado para baixo.svg"></button>
+                    <button type="button" class="btn btn-outline btn-icon"
+                        onclick="app.addStrum('abafado para cima.svg', 'u')" title="Abafado Cima"><img
+                            src="icons/abafado para cima.svg"></button>
+                    <button type="button" class="btn btn-outline" onclick="app.addStrum('|', '|')"
+                        title="Divisão">|</button>
+                    <button type="button" class="btn btn-outline" onclick="app.addStrum('SPACE', ' ')"
+                        title="Espaço">Espaço</button>
+                    <button type="button" class="btn btn-outline"
+                        style="margin-left:auto; color: var(--primary-color); border-color: var(--primary-color);"
+                        onclick="app.clearStrum()">Limpar</button>
+                </div>
+                <!-- Hidden input to store actual value -->
+                <input type="hidden" name="strumming" id="edit-strumming">
+                <!-- Visual preview in editor -->
+                <div id="edit-strumming-preview"
+                    style="min-height: 50px; background: #ffffff; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem; display: flex; gap: 4px; align-items: center; flex-wrap: wrap; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                    <span style="color: var(--text-muted); font-size: 0.9rem;">Toque nos botões acima para criar a
+                        batida...</span>
+                </div>
+            </div>
+
+            <div class="input-group" style="flex: 1; display: flex; flex-direction: column;">
+                <div class="split-headers"
+                    style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 0.5rem; align-items: end;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                        <label style="margin:0;">Letra da Música</label>
+                        <button type="button" class="btn btn-outline"
+                            style="font-size: 0.75rem; padding: 0.2rem 0.6rem; border-color: var(--primary-color); color: var(--primary-color); display: flex; align-items: center; gap: 4px;"
+                            onclick="app.autoWrapChords()">
+                            <span>✨ Identificar Acordes</span>
+                        </button>
+                    </div>
+                    <div style="text-align: center; font-size: 0.9rem; font-weight: 500; color: var(--text-color);">
+                        Pré-visualização</div>
+                </div>
+
+                <div class="split-editor-container"
+                    style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; height: 60vh;">
+                    <!-- Coluna da Esquerda: Editor -->
+                    <textarea name="content" id="edit-content"
+                        style="width: 100%; height: 100%; resize: none; font-family: monospace; line-height: 1.5; white-space: pre; border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; overflow-y: auto;"
+                        required placeholder="Cole a letra com os acordes entre colchetes, ex: [G] [Am]"
+                        oninput="app.updateEditorPreview()" onscroll="app.syncEditorScroll()"></textarea>
+
+                    <!-- Coluna da Direita: Preview -->
+                    <div id="edit-preview" class="cifra-content" contenteditable="true" spellcheck="false"
+                        style="width: 100%; height: 100%; border: 1px solid var(--border-color); border-radius: 8px; background: white; padding: 1rem; overflow-y: auto; font-family: 'Roboto Mono', monospace; white-space: pre-wrap; position: relative;">
+                        <!-- O conteúdo renderizado vai aqui -->
+                    </div>
+                </div>
+            </div>
+            <div
+                style="margin-top: 1rem; margin-bottom: 1rem; background: rgba(0,0,0,0.05); padding: 1rem; border-radius: 8px; font-size: 0.85rem; color: var(--text-muted);">
+                <strong style="display:block; margin-bottom:0.5rem; color: var(--text-color);">💡 Dicas de
+                    Edição</strong>
+                <ul style="margin:0; padding-left: 1.2rem; line-height: 1.6;">
+                    <li>Use <strong>[Acorde]</strong> entre colchetes para destacar (ex: <code>[G]</code>,
+                        <code>[Am7]</code>).
+                    </li>
+                    <li><strong>Loop Automático:</strong>
+                        <ul style="margin: 0.3rem 0;">
+                            <li><code>[|]</code> marca o <strong>Início</strong> do loop. (Use <code>[|5|]</code>
+                                para
+                                esperar 5s antes de recomeçar).</li>
+                            <li><code>[.|.]</code> marca o <strong>Final</strong> do loop. (Use <code>[.|5|.]</code>
+                                para esperar 5s antes de voltar).</li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </form>
+    </template>
+
+    <!-- Modal Seleção de Acordes -->
+    <div id="chord-selector-modal" class="modal"
+        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000; align-items:center; justify-content:center;">
+        <div class="modal-content"
+            style="background:var(--card-bg); padding:1.5rem; border-radius:8px; width:90%; max-width:800px; max-height:90vh; overflow-y:auto; border:1px solid var(--border-color);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
+                <h2 style="margin:0;">Selecionar Acorde</h2>
+                <button class="btn btn-outline" onclick="app.closeChordSelector()">Fechar</button>
+            </div>
+
+            <!-- Lista de Bases (C, D, E...) -->
+            <div id="chord-bases"
+                style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem; border-bottom:1px solid var(--border-color); padding-bottom:1rem;">
+                <!-- Preenchido via JS -->
+            </div>
+
+            <!-- Variações do Acorde Selecionado -->
+            <div id="chord-variations" style="display:flex; gap:1rem; flex-wrap:wrap;">
+                <p style="color:var(--text-muted)">Selecione um tom acima...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Container para Modais Premium -->
+    <div id="modal-root"></div>
+
+    <script src="chords.js?v=5"></script>
+    <script src="app.js?v=5"></script>
+</body>
+
+</html>
