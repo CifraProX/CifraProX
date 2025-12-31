@@ -1347,8 +1347,8 @@ const app = {
         if (deltaTime > 100) deltaTime = 100;
         app.scrollState.lastTime = currentTime;
 
-        // Choose speed based on device width (850px is the breakpoint in CSS)
-        const isMobile = window.innerWidth <= 850;
+        // Choose speed based on device width (600px matches checkLoop logic)
+        const isMobile = window.innerWidth <= 600;
         const speedVal = isMobile
             ? (app.state.currentCifra.scrollSpeedMobile || app.state.currentCifra.scrollSpeed || 30)
             : (app.state.currentCifra.scrollSpeed || 30);
