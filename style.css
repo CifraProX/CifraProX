@@ -892,3 +892,23 @@ textarea {
     font-weight: bold;
     margin-bottom: 5px;
 }
+/* Estilo para conteudo da cifra (Texto + Acordes) - Fix Mobile v15 */
+#view-content {
+    font-family: 'Roboto Mono', 'Courier New', monospace !important;
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.5;
+    font-size: 15px;
+    color: var(--text-color);
+    overflow-x: hidden;
+    width: 100%;
+    margin-bottom: 2rem;
+}
+
+@media (max-width: 600px) {
+    #view-content {
+        font-size: 11px;
+        letter-spacing: -0.3px;
+        line-height: 1.4;
+    }
+}
