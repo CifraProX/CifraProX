@@ -299,10 +299,10 @@
                 <!-- Hidden input to store actual value -->
                 <input type="hidden" name="strumming" id="edit-strumming">
                 <!-- Visual preview in editor -->
-                <div id="edit-strumming-preview"
-                    style="min-height: 50px; background: #ffffff; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem; display: flex; gap: 4px; align-items: center; flex-wrap: wrap; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-                    <span style="color: var(--text-muted); font-size: 0.9rem;">Toque nos botões acima para criar a
-                        batida...</span>
+                <div id="edit-strumming-preview" tabindex="0" onkeydown="app.handleStrumInput(event)"
+                    style="min-height: 50px; background: #ffffff; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem; display: flex; gap: 4px; align-items: center; flex-wrap: wrap; box-shadow: 0 1px 2px rgba(0,0,0,0.05); cursor: text; outline: none;">
+                    <span style="color: var(--text-muted); font-size: 0.9rem; pointer-events: none;">Toque aqui para
+                        editar (Espaço ou Backspace)...</span>
                 </div>
             </div>
 

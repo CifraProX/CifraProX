@@ -1060,12 +1060,51 @@ const app = {
     },
 
     renderStrumming: (strumString) => {
-        return strumString.split('').map(char => {
-            if (char === ' ') return '<div class="strum-space"></div>';
-            if (char === '|') return '<span class="strum-divider">|</span>';
-            const icon = app.strumMapping[char];
-            return icon ? `<img src="icons/${icon}" class="strum-icon">` : '';
+        return strumString.split('').map((char, index) => {
+            let content = '';
+            if (char === ' ') content = '<div class="strum-space"></div>';
+            else if (char === '|') content = '<span class="strum-divider">|</span>';
+            else {
+                const icon = app.strumMapping[char];
+                content = icon ? `<img src="icons/${icon}" class="strum-icon">` : '';
+            }
+            // Wrap in clickable span for deletion
+            return `<span class="strum-item" onclick="app.removeStrum(${index})" title="Toque para apagar" style="cursor:pointer; display:flex; align-items:center;">${content}</span>`;
         }).join('');
+    },
+
+    removeStrum: (index) => {
+        const input = document.getElementById('edit-strumming');
+        if (!input) return;
+        const val = input.value;
+        const newVal = val.slice(0, index) + val.slice(index + 1);
+        input.value = newVal;
+        app.updateStrumPreview(newVal);
+
+        // Keep focus on preview if possible, unless empty
+        const preview = document.getElementById('edit-strumming-preview');
+        if (preview && newVal.length > 0) preview.focus();
+    },
+
+    handleStrumInput: (e) => {
+        // Prevent default scrolling for Space
+        if (e.key === ' ' || e.code === 'Space') {
+            e.preventDefault();
+            app.addStrum('SPACE', ' ');
+            return;
+        }
+
+        if (e.key === 'Backspace') {
+            e.preventDefault();
+            const input = document.getElementById('edit-strumming');
+            if (input && input.value.length > 0) {
+                // Remove last char
+                const newVal = input.value.slice(0, -1);
+                input.value = newVal;
+                app.updateStrumPreview(newVal);
+            }
+            return;
+        }
     },
 
     editCurrent: () => {
