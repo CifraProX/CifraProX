@@ -56,6 +56,14 @@ const app = {
                     if (app.state.currentView === 'home') app.loadCifras();
                 }
                 app.renderHeader(app.state.currentView);
+
+                // Update Home UI elements (Create Button)
+                if (app.state.currentView === 'home') {
+                    const btnCreate = document.getElementById('btn-create');
+                    if (btnCreate) {
+                        btnCreate.style.display = app.state.user ? 'block' : 'none';
+                    }
+                }
             });
 
             // Register Service Worker
