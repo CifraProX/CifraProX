@@ -161,7 +161,7 @@
                 <div id="view-strumming" style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;"></div>
             </div>
 
-            <div class="cifra-content" id="view-content" style="font-family: monospace;"></div>
+            <div class="cifra-content" id="view-content" style="font-family: monospace; font-size: 18px;"></div>
 
             <!-- Autoscroll Controls -->
             <div id="loop-countdown" style="display:none;">
@@ -325,12 +325,12 @@
                     style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; height: 60vh;">
                     <!-- Coluna da Esquerda: Editor -->
                     <textarea name="content" id="edit-content"
-                        style="width: 100%; height: 100%; resize: none; font-family: monospace; line-height: 1.5; white-space: pre; border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; overflow-y: auto;"
+                        style="width: 100%; height: 100%; resize: none; font-family: monospace; font-size: 15px; line-height: 1.5; white-space: pre; border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; overflow-y: auto;"
                         required placeholder="Cole a letra com os acordes entre colchetes, ex: [G] [Am]"
                         oninput="app.updateEditorPreview()" onscroll="app.syncEditorScroll()"></textarea>
 
                     <div id="edit-preview" class="cifra-content"
-                        style="width: 100%; height: 100%; border: 1px solid var(--border-color); border-radius: 8px; background: white; padding: 1rem; overflow-y: auto; font-family: monospace; white-space: pre-wrap; position: relative;">
+                        style="width: 100%; height: 100%; border: 1px solid var(--border-color); border-radius: 8px; background: white; padding: 1rem; overflow-y: auto; font-family: monospace; font-size: 15px; white-space: pre-wrap; position: relative;">
                         <!-- O conteúdo renderizado vai aqui -->
                     </div>
                 </div>
