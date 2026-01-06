@@ -473,13 +473,14 @@ const app = {
         // Ignora marcadores de loop e delay
         if (name.includes('|') || name.includes('.')) return false;
 
-        const clean = name.trim();
+        const clean = name.trim().toLowerCase();
+
+        // Lista negra de termos comuns que não são acordes
+        const blacklist = ['intro', 'solo', 'riff', 'refrão', 'ponte', 'bridge', 'final', 'outro', 'instrumental', 'parte', 'pré-refrão', 'coro', 'batida', 'ritmo'];
+        if (blacklist.some(term => clean.includes(term))) return false;
+
         // Ignora frases ou nomes muito longos (seções)
-        if (clean.length > 10 || clean.includes(' ')) {
-            // Lista negra de termos comuns de seção
-            const blacklist = ['intro', 'solo', 'riff', 'refrão', 'ponte', 'bridge', 'final', 'outro', 'instrumental', 'parte', 'pré-refrão', 'coro'];
-            if (blacklist.some(term => clean.toLowerCase().includes(term))) return false;
-        }
+        if (clean.length > 10 || clean.includes(' ')) return false;
 
         // Padrão básico de acorde (Começa com A-G)
         return /^[A-G]/.test(clean);
@@ -624,8 +625,8 @@ const app = {
         const chordPattern = /\b([A-G][b#]?(?:maj|min|m|M|aug|dim|sus|add)?\d*[\+\-]?º?(?:[b#]\d*)?(?:\([^)]+\))?(?:\/[A-G][b#]?[\+\-]?\d*)?)(?=\s|$)/g;
 
         const newLines = lines.map(line => {
-            // Se já tem colchetes, ignora para não duplicar
-            if (line.includes('[') && line.includes(']')) return line;
+            // Se a linha for apenas uma marcação de seção completa (ex: "[Intro]"), ignora
+            if (/^\[[^\]]+\]$/.test(line.trim())) return line;
 
             const words = line.trim().split(/\s+/).filter(w => w.length > 0);
             if (words.length === 0) return line;
@@ -633,11 +634,28 @@ const app = {
             // Busca matches de acordes usando a nova regex
             const matches = [...line.matchAll(chordPattern)];
 
-            // Critério: se a linha for composta majoritariamente por padrões de acordes (> 60%)
-            // Ou se for uma linha curta com pelo menos um acorde identificado
-            if (matches.length > 0 && (matches.length >= words.length * 0.6)) {
-                // Substituir mantendo o espaçamento original
-                return line.replace(chordPattern, (match) => `[${match}]`);
+            // Critério: se houver acordes identificados
+            if (matches.length > 0) {
+                // Se a linha tiver colchetes (ex: "[Intro:] G D"), precisamos ser cuidadosos
+                // Substituir apenas o que NÃO está entre colchetes
+                let result = line;
+                // Uma estratégia simples: substituir os matches que não estão dentro de [ ]
+                const matchesToWrap = matches.filter(m => {
+                    const index = m.index;
+                    const before = line.substring(0, index);
+                    const openBrackets = (before.match(/\[/g) || []).length;
+                    const closeBrackets = (before.match(/\]/g) || []).length;
+                    return openBrackets === closeBrackets; // Está fora de colchetes
+                });
+
+                if (matchesToWrap.length > 0) {
+                    // Substituir do fim para o começo para manter os índices
+                    for (let i = matchesToWrap.length - 1; i >= 0; i--) {
+                        const m = matchesToWrap[i];
+                        result = result.substring(0, m.index) + `[${m[0]}]` + result.substring(m.index + m[0].length);
+                    }
+                    return result;
+                }
             }
 
             return line;
