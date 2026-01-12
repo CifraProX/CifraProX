@@ -306,6 +306,14 @@
                 </div>
             </div>
 
+            <!-- Chords Gallery in Editor -->
+            <div id="edit-chords-container"
+                style="display:none; margin-bottom: 2rem; background: var(--card-bg); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border-color);">
+                <p style="font-size: 0.9rem; font-weight: 600; color: var(--text-color); margin-bottom: 1rem;">Gerenciar
+                    Acordes da Cifra:</p>
+                <div id="edit-chords-list" style="display: flex; gap: 1rem; flex-wrap: wrap;"></div>
+            </div>
+
             <div class="input-group" style="flex: 1; display: flex; flex-direction: column;">
                 <div class="split-headers"
                     style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 0.5rem; align-items: end;">
@@ -343,15 +351,11 @@
                     <li>Use <strong>[Acorde]</strong> entre colchetes para destacar (ex: <code>[G]</code>,
                         <code>[Am7]</code>).
                     </li>
-                    <li><strong>Loop Automático:</strong>
+                    <li><strong>Pausa no Scroll:</strong>
                         <ul style="margin: 0.3rem 0;">
-                            <li><code>[|]</code> marca o <strong>Início</strong> do loop. (Use <code>[|5|]</code> ou
-                                <code>[|10|5|5|]</code> para
-                                esperar XXs antes de recomeçar).
-                            </li>
-                            <li><code>[.|.]</code> marca o <strong>Final</strong> do loop. (Use <code>[.|5|.]</code> ou
-                                <code>[.|10|5|5|.]</code>
-                                para esperar antes de voltar).
+                            <li><code>[p|5|]</code> Pausa o scroll por 5s quando chegar no meio da tela.</li>
+                            <li><strong>Multi-dispositivo:</strong> Use <code>[p|10|5|]</code> para tempos diferentes:
+                                <br><small>(10s Tablet/PC | 5s Celular)</small>
                             </li>
                         </ul>
                     </li>

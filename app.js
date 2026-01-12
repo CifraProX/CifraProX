@@ -6,7 +6,6 @@ const app = {
         setlists: [],
         currentSetlist: null,
         currentSetlistIndex: -1,
-        loopExecuted: false,
         unsubs: { cifras: null, setlists: null } // Control for listeners
     },
 
@@ -470,8 +469,8 @@ const app = {
 
     isActualChord: (name) => {
         if (!name) return false;
-        // Ignora marcadores de loop e delay
-        if (name.includes('|') || name.includes('.')) return false;
+        // Ignora marcadores de loop e pausa
+        if (name.includes('|') || name.includes('.') || name.startsWith('p|')) return false;
 
         const clean = name.trim().toLowerCase();
 
@@ -500,7 +499,6 @@ const app = {
             // Populate logic same as before...
 
             app.state.currentCifra = data;
-            app.state.loopExecuted = false;
             document.getElementById('view-title').innerText = data.title;
             document.getElementById('view-artist').innerText = data.artist;
 
@@ -525,31 +523,19 @@ const app = {
             let contentHtml = data.content;
             contentHtml = contentHtml.replace(/\r\n/g, '\n');
 
-            // Loop Markers - Syntax: [|desktop|tablet|mobile|] or [|time|]
-            contentHtml = contentHtml.replace(/\[\|(\d*)(?:\|(\d*))?(?:\|(\d*))?\|?\]/g, (match, d1, d2, d3) => {
-                const delayDesktop = d1 ? parseInt(d1) : 0;
-                const delayTablet = d2 ? parseInt(d2) : delayDesktop;
-                const delayMobile = d3 ? parseInt(d3) : delayTablet;
+            // Pause Markers - Syntax: [p|tabletPC|mobile|]
+            contentHtml = contentHtml.replace(/\[p\|(\d*)(?:\|(\d*))?\|?\]/g, (match, d1, d2) => {
+                const delayTabletPC = d1 ? parseInt(d1) : 0;
+                const delayMobile = d2 ? parseInt(d2) : delayTabletPC;
 
-                return `<div id="loop-start" 
-                    data-delay="${delayDesktop}" 
-                    data-delay-tablet="${delayTablet}" 
+                return `<div class="pause-trigger" 
+                    data-delay="${delayTabletPC}" 
                     data-delay-mobile="${delayMobile}" 
                     style="height: 1px; width: 100%; opacity: 0; pointer-events: none; margin: 0;"></div>`;
             });
 
-            // Loop Trigger - Syntax: [.|desktop|tablet|mobile|.] or [.|time|.]
-            contentHtml = contentHtml.replace(/\[\.\|(\d*)(?:\|(\d*))?(?:\|(\d*))?\|?\.\]/g, (match, d1, d2, d3) => {
-                const delayDesktop = d1 ? parseInt(d1) : 0;
-                const delayTablet = d2 ? parseInt(d2) : delayDesktop;
-                const delayMobile = d3 ? parseInt(d3) : delayTablet;
-
-                return `<div id="loop-trigger" 
-                    data-delay="${delayDesktop}" 
-                    data-delay-tablet="${delayTablet}" 
-                    data-delay-mobile="${delayMobile}" 
-                    style="height: 1px; width: 100%; opacity: 0; pointer-events: none; margin: 0;"></div>`;
-            });
+            contentHtml = contentHtml.replace(/\[\|(\d*)(?:\|(\d*))?(?:\|(\d*))?\|?\]/g, '');
+            contentHtml = contentHtml.replace(/\[\.\|(\d*)(?:\|(\d*))?(?:\|(\d*))?\|?\.\]/g, '');
 
             // Standard Chord Replacement (Regex) - Reverting Smart Logic
             contentHtml = contentHtml.replace(/\[([^\]]+)\]/g, (match, chordName) => {
@@ -590,7 +576,7 @@ const app = {
                 chordsContainer.style.display = 'block';
                 chordsList.innerHTML = '';
                 foundChords.forEach(chordName => {
-                    const card = app.createChordCard(chordName);
+                    const card = app.createChordCard(chordName, false);
                     if (card) {
                         chordsList.appendChild(card);
                     }
@@ -1006,7 +992,37 @@ const app = {
         document.getElementById('edit-ready').checked = !!cifra.ready;
 
         app.updateStrumPreview(strum);
+        app.updateEditorChords();
         app.updateEditorPreview();
+    },
+
+    updateEditorChords: () => {
+        const input = document.getElementById('edit-content');
+        const chordsList = document.getElementById('edit-chords-list');
+        const container = document.getElementById('edit-chords-container');
+        if (!input || !chordsList || !container) return;
+
+        const content = input.value;
+        const chordRegex = /\[(.*?)\]/g;
+        const foundChords = new Set();
+        let match;
+        while ((match = chordRegex.exec(content)) !== null) {
+            const name = match[1];
+            if (app.isActualChord(name)) {
+                foundChords.add(name);
+            }
+        }
+
+        if (foundChords.size > 0) {
+            container.style.display = 'block';
+            chordsList.innerHTML = '';
+            foundChords.forEach(chordName => {
+                const card = app.createChordCard(chordName, true);
+                if (card) chordsList.appendChild(card);
+            });
+        } else {
+            container.style.display = 'none';
+        }
     },
 
     updateEditorPreview: () => {
@@ -1014,30 +1030,24 @@ const app = {
         const preview = document.getElementById('edit-preview');
         if (!input || !preview) return;
 
+        app.updateEditorChords();
+
         let content = input.value;
         // Sanitizar
         content = content.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-        // Loop Start Marker
-        content = content.replace(/\[\|(\d*)(?:\|(\d*))?(?:\|(\d*))?\|?\]/g, (match, d1, d2, d3) => {
-            const delayDesktop = (d1 !== undefined && d1 !== '') ? parseInt(d1) : -1;
-            const delayTablet = (d2 !== undefined && d2 !== '') ? parseInt(d2) : delayDesktop;
-            const delayMobile = (d3 !== undefined && d3 !== '') ? parseInt(d3) : delayTablet;
+        // Pause Marker - Syntax: [p|tabletPC|mobile|]
+        content = content.replace(/\[p\|(\d*)(?:\|(\d*))?\|?\]/g, (match, d1, d2) => {
+            const delayTabletPC = (d1 !== undefined && d1 !== '') ? parseInt(d1) : -1;
+            const delayMobile = (d2 !== undefined && d2 !== '') ? parseInt(d2) : delayTabletPC;
 
-            // Visual cue for editor
-            const deskTxt = delayDesktop === -1 ? 'Imediato' : (delayDesktop === 0 ? 'Desativado' : delayDesktop + 's');
-            return `<div style="border-top: 1px dashed var(--primary-color); color:var(--primary-color); font-size:0.8rem; padding: 2px 0;">↺ Início Loop (${deskTxt})</div>`;
+            const deskTxt = delayTabletPC === -1 ? 'Imediato' : (delayTabletPC === 0 ? 'Desativado' : delayTabletPC + 's');
+            return `<div style="border-top: 1px dashed #10b981; color:#10b981; font-size:0.8rem; padding: 2px 0; margin: 5px 0;">⏸ Pausa (${deskTxt})</div>`;
         });
 
-        // Loop Trigger Marker
-        content = content.replace(/\[\.\|(\d*)(?:\|(\d*))?(?:\|(\d*))?\|?\.\]/g, (match, d1, d2, d3) => {
-            const delayDesktop = (d1 !== undefined && d1 !== '') ? parseInt(d1) : -1;
-            const delayTablet = (d2 !== undefined && d2 !== '') ? parseInt(d2) : delayDesktop;
-            const delayMobile = (d3 !== undefined && d3 !== '') ? parseInt(d3) : delayTablet;
-
-            const deskTxt = delayDesktop === -1 ? 'Imediato' : (delayDesktop === 0 ? 'Desativado' : delayDesktop + 's');
-            return `<div style="border-bottom: 1px solid #f59e0b; color:#f59e0b; font-size:0.8rem; padding: 2px 0; margin-bottom:10px;">↩ Fim Loop (${deskTxt})</div>`;
-        });
+        // Remove Loop Markers if present
+        content = content.replace(/\[\|(\d*)(?:\|(\d*))?(?:\|(\d*))?\|?\]/g, '');
+        content = content.replace(/\[\.\|(\d*)(?:\|(\d*))?(?:\|(\d*))?\|?\.\]/g, '');
 
         // Chords - Standard Regex (No Smart)
         const formatted = content.replace(/\[([^\]]+)\]/g, (match, chord) => {
@@ -1138,7 +1148,7 @@ const app = {
     },
 
     // --- CHORDS LIBRARY & SELECTOR ---
-    createChordCard: (chordName) => {
+    createChordCard: (chordName, isEditable = false) => {
         const svg = Chords.render(chordName, 0);
 
         if (!svg) {
@@ -1151,7 +1161,7 @@ const app = {
                     <div style="width:60px; height:70px; border:1px dashed var(--border-color); border-radius:4px; opacity:0.3; display:flex; align-items:center; justify-content:center;">
                          <span style="font-size:1.5rem; color:var(--border-color)">?</span>
                     </div>
-                    <button class="btn btn-outline" style="font-size:0.7rem; padding:4px 10px; height:auto; min-width:80px;" onclick="event.stopPropagation(); app.openChordCreator('${chordName.replace(/'/g, "\\'")}')">Cadastrar</button>
+                    ${isEditable ? `<button class="btn btn-outline" style="font-size:0.7rem; padding:4px 10px; height:auto; min-width:80px;" onclick="event.stopPropagation(); app.openChordCreator('${chordName.replace(/'/g, "\\'")}')">Cadastrar</button>` : ''}
                 </div>
             `;
             return card;
@@ -1162,21 +1172,22 @@ const app = {
         card.className = 'chord-card';
         card.dataset.chord = chordName;
         card.dataset.index = 0;
+        card.dataset.editable = isEditable;
         card.id = `card-${chordName.replace(/[^a-zA-Z0-9]/g, '-')}`;
         const cleanName = chordName.replace(/\*+$/, '');
 
         let navHtml = '';
-        if (count > 1) {
+        if (isEditable && count > 1) {
             navHtml = `<div class="chord-nav">
                     <button class="chord-nav-btn" onclick="app.rotateChord('${chordName}', -1)">‹</button>
                     <button class="chord-nav-btn" onclick="app.rotateChord('${chordName}', 1)">›</button>
                 </div>`;
         }
 
-        // Botões de ação (apenas se logado)
+        // Botões de ação (apenas se logado e for modo editável)
         let actionsBtn = '';
         const defaultIndex = 0;
-        if (app.state.user) {
+        if (app.state.user && isEditable) {
             actionsBtn = `
                 <div class="chord-card-actions">
                     <button class="btn-chord-action" title="Editar Acorde/Variação" onclick="event.stopPropagation(); app.openChordCreator('${chordName.replace(/'/g, "\\'")}', ${defaultIndex})">
@@ -1257,18 +1268,45 @@ const app = {
         const cardId = `card-${chordName.replace(/[^a-zA-Z0-9]/g, '-')}`;
         const card = document.getElementById(cardId);
         if (!card) return;
+
+        const isEditable = card.dataset.editable === 'true';
+        const textarea = document.getElementById('edit-content');
+
         let index = parseInt(card.dataset.index || 0);
         const count = Chords.getVariationCount(chordName);
-        index = (index + direction + count) % count;
-        card.dataset.index = index;
-        const newSvg = Chords.render(chordName, index);
+        const newIndex = (index + direction + count) % count;
+
+        if (isEditable && textarea) {
+            // Sincronizar com o texto: converter índice em asteriscos
+            const baseName = chordName.replace(/\*+$/, '');
+            let newChordName = baseName;
+            for (let i = 0; i < newIndex; i++) newChordName += '*';
+
+            // Escapar caracteres especiais para o Regex (como #, b, /)
+            const escapedOld = chordName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp('\\[' + escapedOld + '\\]', 'g');
+
+            const oldContent = textarea.value;
+            const newContent = oldContent.replace(regex, `[${newChordName}]`);
+
+            if (oldContent !== newContent) {
+                textarea.value = newContent;
+                // O updateEditorPreview (chamado pelo oninput ou manualmente) vai cuidar de atualizar a UI
+                app.updateEditorPreview();
+                app.showToast(`Variação de ${baseName} atualizada na cifra!`);
+                return; // Interrompe pois o updateEditorPreview já redesenhou tudo
+            }
+        }
+
+        // Caso não seja editável ou falhe a sincronização, apenas atualiza o SVG localmente
+        card.dataset.index = newIndex;
+        const newSvg = Chords.render(chordName, newIndex);
         const svgContainer = card.querySelector('.chord-svg-container');
         if (svgContainer) svgContainer.innerHTML = newSvg;
 
-        // Sincronizar botão de edição com o novo índice
         const editBtn = card.querySelector('.btn-chord-action[title*="Editar"]');
-        if (editBtn) {
-            editBtn.setAttribute('onclick', `event.stopPropagation(); app.openChordCreator('${chordName.replace(/'/g, "\\'")}', ${index})`);
+        if (editBtn && isEditable) {
+            editBtn.setAttribute('onclick', `event.stopPropagation(); app.openChordCreator('${chordName.replace(/'/g, "\\'")}', ${newIndex})`);
         }
     },
 
@@ -1277,7 +1315,7 @@ const app = {
         if (!container) return;
         container.innerHTML = '';
         Object.keys(Chords.dict).sort().forEach(chordName => {
-            const card = app.createChordCard(chordName);
+            const card = app.createChordCard(chordName, true);
             if (card) {
                 card.style.width = '160px';
                 container.appendChild(card);
@@ -1374,7 +1412,6 @@ const app = {
         active: false,
         speed: 30,
         lastTime: 0,
-        loopExecuted: false,
         accumulator: 0
     },
 
@@ -1443,79 +1480,45 @@ const app = {
             window.scrollBy(0, integers);
             app.scrollState.accumulator -= integers;
         }
-        app.checkLoop();
+        app.checkTriggers();
         requestAnimationFrame(app.scrollLoop);
     },
 
-    checkLoop: () => {
-        const trigger = document.getElementById('loop-trigger');
-        const start = document.getElementById('loop-start');
+    checkTriggers: () => {
+        app.checkPause();
+    },
 
-        if (trigger && start && !app.state.loopExecuted) {
+    checkPause: () => {
+        const pauses = document.querySelectorAll('.pause-trigger:not([data-executed="true"])');
+
+        pauses.forEach(trigger => {
             const rect = trigger.getBoundingClientRect();
+            // Trigger pause if it reaches middle of screen (or near it)
+            const triggerPoint = window.innerHeight / 2;
 
-            // Trigger loop if visible
-            if (rect.top < window.innerHeight) {
-                console.log('Detectado fim de loop...');
-                app.state.loopExecuted = true;
+            if (rect.top <= triggerPoint && rect.top > 0) {
+                console.log('Detectada pausa no meio do scroll...');
+                trigger.setAttribute('data-executed', 'true');
 
-                // Determine appropriate delay based on device width
-                const width = window.innerWidth;
-                const isMobile = width <= 600;
-                const isTablet = width > 600 && width <= 1024;
+                const isMobile = window.innerWidth <= 600;
 
                 const getDelay = (el) => {
-                    // Default to -1 (Immediate) if attribute missing or not set
-                    // But here we rely on data attributes populated by loadCifra which uses -1 as default
                     if (isMobile) return parseInt(el.dataset.delayMobile || el.dataset.delay || -1);
-                    if (isTablet) return parseInt(el.dataset.delayTablet || el.dataset.delay || -1);
                     return parseInt(el.dataset.delay || -1);
                 };
 
                 let delaySeconds = getDelay(trigger);
 
-                // FEATURE: Se o delay for 0, o loop está DESATIVADO para este dispositivo.
-                if (delaySeconds === 0) {
-                    console.log('Loop desativado para este dispositivo (delay=0)');
-                    return;
-                }
+                if (delaySeconds <= 0) return;
 
-                // Se for -1 (Default), tratamos como 0 (Imediato)
-                if (delaySeconds === -1) delaySeconds = 0;
-
-                const execute = () => {
-                    let startDelay = getDelay(start);
-
-                    if (startDelay === 0) {
-                        console.log('Start Loop disabled for this device (delay=0)');
-                        return; // Disabled, don't loop back
-                    }
-
-                    if (startDelay === -1) startDelay = 0;
-
-                    start.scrollIntoView({ behavior: 'auto', block: 'start' });
-
-                    if (startDelay > 0) {
-                        app.startCountdown(startDelay, 'Reiniciando em', () => {
-                            app.scrollState.active = true;
-                            app.scrollState.lastTime = performance.now();
-                            requestAnimationFrame(app.scrollLoop);
-                        });
-                    } else {
-                        app.scrollState.active = true;
-                        app.scrollState.lastTime = performance.now();
-                        requestAnimationFrame(app.scrollLoop);
-                    }
-                };
-
-                if (delaySeconds > 0) {
-                    app.scrollState.active = false; // Pause
-                    app.startCountdown(delaySeconds, 'Voltando em', execute);
-                } else {
-                    execute();
-                }
+                app.scrollState.active = false; // Pause
+                app.startCountdown(delaySeconds, 'Pausado em', () => {
+                    app.scrollState.active = true;
+                    app.scrollState.lastTime = performance.now();
+                    requestAnimationFrame(app.scrollLoop);
+                });
             }
-        }
+        });
     },
 
     startCountdown: (seconds, label, onComplete) => {
