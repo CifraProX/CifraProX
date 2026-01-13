@@ -331,7 +331,7 @@ const app = {
 
     filterCifras: () => {
         const list = document.getElementById('cifra-list');
-        const searchTerm = document.getElementById('filter-search')?.value.toLowerCase() || '';
+        const searchTerm = document.getElementById('filter-search')?.value.toLowerCase().trim() || '';
         const genreFilter = document.getElementById('filter-genre')?.value || '';
         const capoFilter = document.getElementById('filter-capo')?.value || '';
 
@@ -339,10 +339,12 @@ const app = {
             // Privacy Filter: Guest sees only ready chords
             if (!app.state.user && !c.ready) return false;
 
-            const matchesSearch = c.title.toLowerCase().includes(searchTerm) ||
-                c.artist.toLowerCase().includes(searchTerm);
+            const title = (c.title || '').toLowerCase();
+            const artist = (c.artist || '').toLowerCase();
+
+            const matchesSearch = title.includes(searchTerm) || artist.includes(searchTerm);
             const matchesGenre = genreFilter ? c.genre === genreFilter : true;
-            const matchesCapo = capoFilter ? c.capo === capoFilter : true;
+            const matchesCapo = capoFilter ? (capoFilter === 'Sem Capo' ? (!c.capo || c.capo === 'Sem Capo') : c.capo === capoFilter) : true;
 
             return matchesSearch && matchesGenre && matchesCapo;
         });
@@ -365,7 +367,7 @@ const app = {
                 <div style="display:flex; gap:0.5rem; margin-top:0.5rem; flex-wrap:wrap;">
                     ${!c.ready ? `<span style="font-size:0.75rem; background:#fee2e2; color:#b91c1c; padding:2px 6px; border-radius:4px; border: 1px solid #fecaca;">Rascunho</span>` : ''}
                     ${c.genre ? `<span style="font-size:0.75rem; background:#e0f2f1; color:#00695c; padding:2px 6px; border-radius:4px;">${c.genre}</span>` : ''}
-                    ${c.capo ? `<span style="font-size:0.75rem; background:#f3e5f5; color:#4a148c; padding:2px 6px; border-radius:4px;">🎸 ${c.capo}</span>` : ''}
+                    ${(c.capo && app.state.user) ? `<span style="font-size:0.75rem; background:#f3e5f5; color:#4a148c; padding:2px 6px; border-radius:4px;">🎸 ${c.capo}</span>` : ''}
                 </div>
                 ${app.getGenreIcon(c.genre)}
             </div>
@@ -1037,12 +1039,12 @@ const app = {
         content = content.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
         // Pause Marker - Syntax: [p|tabletPC|mobile|]
-        content = content.replace(/\[p\|(\d*)(?:\|(\d*))?\|?\]/g, (match, d1, d2) => {
+        content = content.replace(/\[p\|(\d*)(?:\|(\d*))?\|?\]\n?/g, (match, d1, d2) => {
             const delayTabletPC = (d1 !== undefined && d1 !== '') ? parseInt(d1) : -1;
             const delayMobile = (d2 !== undefined && d2 !== '') ? parseInt(d2) : delayTabletPC;
 
             const deskTxt = delayTabletPC === -1 ? 'Imediato' : (delayTabletPC === 0 ? 'Desativado' : delayTabletPC + 's');
-            return `<div style="border-top: 1px dashed #10b981; color:#10b981; font-size:0.8rem; padding: 2px 0; margin: 5px 0;">⏸ Pausa (${deskTxt})</div>`;
+            return `<div style="border-top: 1px dashed #10b981; color:#10b981; font-size:0.75rem; padding: 1px 0; margin-bottom: 2px;">⏸ Pausa (${deskTxt})</div>`;
         });
 
         // Remove Loop Markers if present
@@ -1161,17 +1163,18 @@ const app = {
                     <div style="width:60px; height:70px; border:1px dashed var(--border-color); border-radius:4px; opacity:0.3; display:flex; align-items:center; justify-content:center;">
                          <span style="font-size:1.5rem; color:var(--border-color)">?</span>
                     </div>
-                    ${isEditable ? `<button class="btn btn-outline" style="font-size:0.7rem; padding:4px 10px; height:auto; min-width:80px;" onclick="event.stopPropagation(); app.openChordCreator('${chordName.replace(/'/g, "\\'")}')">Cadastrar</button>` : ''}
+                    ${isEditable ? `<button type="button" class="btn btn-outline" style="font-size:0.7rem; padding:4px 10px; height:auto; min-width:80px;" onclick="event.stopPropagation(); app.openChordCreator('${chordName.replace(/'/g, "\\'")}')">Cadastrar</button>` : ''}
                 </div>
             `;
             return card;
         }
 
         const count = Chords.getVariationCount(chordName);
+        const starsCount = chordName.split('*').length - 1;
         const card = document.createElement('div');
         card.className = 'chord-card';
         card.dataset.chord = chordName;
-        card.dataset.index = 0;
+        card.dataset.index = starsCount;
         card.dataset.editable = isEditable;
         card.id = `card-${chordName.replace(/[^a-zA-Z0-9]/g, '-')}`;
         const cleanName = chordName.replace(/\*+$/, '');
@@ -1179,8 +1182,8 @@ const app = {
         let navHtml = '';
         if (isEditable && count > 1) {
             navHtml = `<div class="chord-nav">
-                    <button class="chord-nav-btn" onclick="app.rotateChord('${chordName}', -1)">‹</button>
-                    <button class="chord-nav-btn" onclick="app.rotateChord('${chordName}', 1)">›</button>
+                    <button type="button" class="chord-nav-btn" onclick="app.rotateChord('${chordName}', -1)">‹</button>
+                    <button type="button" class="chord-nav-btn" onclick="app.rotateChord('${chordName}', 1)">›</button>
                 </div>`;
         }
 
@@ -1190,10 +1193,10 @@ const app = {
         if (app.state.user && isEditable) {
             actionsBtn = `
                 <div class="chord-card-actions">
-                    <button class="btn-chord-action" title="Editar Acorde/Variação" onclick="event.stopPropagation(); app.openChordCreator('${chordName.replace(/'/g, "\\'")}', ${defaultIndex})">
+                    <button type="button" class="btn-chord-action" title="Editar Acorde/Variação" onclick="event.stopPropagation(); app.openChordCreator('${chordName.replace(/'/g, "\\'")}', ${defaultIndex})">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
                     </button>
-                    <button class="btn-chord-action btn-chord-delete" title="Excluir Acorde/Variação" onclick="event.stopPropagation(); app.confirmDeleteChord('${chordName}')">
+                    <button type="button" class="btn-chord-action btn-chord-delete" title="Excluir Acorde/Variação" onclick="event.stopPropagation(); app.confirmDeleteChord('${chordName}')">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                     </button>
                 </div>
@@ -1448,7 +1451,7 @@ const app = {
         } else {
             iconPlay.style.display = 'block';
             iconPause.style.display = 'none';
-            btn.classList.remove('btn-primary');
+            btn.classList.add('btn-primary');
             // Limpa countdown se existir
             if (app.scrollState.currentInterval) {
                 clearInterval(app.scrollState.currentInterval);
@@ -1479,6 +1482,12 @@ const app = {
             const integers = Math.floor(app.scrollState.accumulator);
             window.scrollBy(0, integers);
             app.scrollState.accumulator -= integers;
+
+            // Check if end of page reached
+            if ((window.innerHeight + window.scrollY) >= (document.documentElement.scrollHeight - 2)) {
+                app.toggleScroll();
+                return;
+            }
         }
         app.checkTriggers();
         requestAnimationFrame(app.scrollLoop);
