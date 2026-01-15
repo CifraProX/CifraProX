@@ -539,6 +539,19 @@ const app = {
             contentHtml = contentHtml.replace(/\[\|(\d*)(?:\|(\d*))?(?:\|(\d*))?\|?\]/g, '');
             contentHtml = contentHtml.replace(/\[\.\|(\d*)(?:\|(\d*))?(?:\|(\d*))?\|?\.\]/g, '');
 
+            // --- Tabs / Solo ---
+            const tabsDiv = document.getElementById('view-tabs');
+            const toggleContainer = document.getElementById('cifra-mode-toggle');
+
+            if (data.tabs && data.tabs.trim()) {
+                tabsDiv.innerText = data.tabs;
+                toggleContainer.style.display = 'flex';
+                app.setContentView('lyrics'); // Default
+            } else {
+                toggleContainer.style.display = 'none';
+                app.setContentView('lyrics');
+            }
+
             // Standard Chord Replacement (Regex) - Reverting Smart Logic
             contentHtml = contentHtml.replace(/\[([^\]]+)\]/g, (match, chordName) => {
                 if (chordName.startsWith('|') || chordName.startsWith('.')) return match;
@@ -629,6 +642,16 @@ const app = {
 
             // Busca matches de acordes usando a nova regex
             const matches = [...line.matchAll(chordPattern)];
+
+            // --- Heurística para evitar identificar acordes dentro de letras ---
+            // 1. Se houver palavras longas (>3 caracteres) que NÃO são acordes, provavelmente é letra.
+            const hasLongLyricWords = words.some(w => w.length > 3 && !w.match(chordPattern));
+            if (hasLongLyricWords) return line;
+
+            // 2. Se a proporção de acordes for muito baixa, provavelmente é letra
+            // (Ex: "E você se foi" -> 1 match "E" em 4 palavras = 0.25)
+            const ratio = matches.length / words.length;
+            if (ratio < 0.5 && words.length > 1) return line;
 
             // Critério: se houver acordes identificados
             if (matches.length > 0) {
@@ -1000,6 +1023,7 @@ const app = {
         const strum = cifra.strumming || '';
         document.getElementById('edit-strumming').value = strum;
         document.getElementById('edit-ready').checked = !!cifra.ready;
+        document.getElementById('edit-tabs').value = cifra.tabs || '';
 
         app.updateStrumPreview(strum);
         app.updateEditorChords();
@@ -1114,17 +1138,46 @@ const app = {
     },
 
     renderStrumming: (strumString) => {
-        return strumString.split('').map((char, index) => {
+        if (!strumString) return '';
+        const chars = strumString.split('');
+        return chars.map((c, index) => {
+            const file = app.strumMapping[c];
             let content = '';
-            if (char === ' ') content = '<div class="strum-space"></div>';
-            else if (char === '|') content = '<span class="strum-divider">|</span>';
-            else {
-                const icon = app.strumMapping[char];
-                content = icon ? `<img src="icons/${icon}" class="strum-icon">` : '';
-            }
-            // Wrap in clickable span for deletion
+            if (file === 'divider') content = '<span class="strum-divider">|</span>';
+            else if (file === 'space') content = '<span class="strum-space"></span>';
+            else if (file) content = `<img src="icons/${file}" class="strum-icon">`;
+
+            if (!content) return '';
             return `<span class="strum-item" onclick="app.removeStrum(${index})" title="Toque para apagar" style="cursor:pointer; display:flex; align-items:center;">${content}</span>`;
         }).join('');
+    },
+
+    setContentView: (mode) => {
+        const lyricsView = document.getElementById('view-content');
+        const tabsView = document.getElementById('view-tabs');
+        const btnLyrics = document.getElementById('btn-mode-lyrics');
+        const btnTabs = document.getElementById('btn-mode-tabs');
+
+        const chordsContainer = document.getElementById('view-chords-container');
+        const strumContainer = document.getElementById('view-strumming-container');
+
+        if (mode === 'tabs') {
+            lyricsView.classList.add('hidden');
+            tabsView.classList.remove('hidden');
+            btnTabs.classList.add('active');
+            btnLyrics.classList.remove('active');
+
+            if (chordsContainer) chordsContainer.style.opacity = '0.3';
+            if (strumContainer) strumContainer.style.opacity = '0.3';
+        } else {
+            lyricsView.classList.remove('hidden');
+            tabsView.classList.add('hidden');
+            btnLyrics.classList.add('active');
+            btnTabs.classList.remove('active');
+
+            if (chordsContainer) chordsContainer.style.opacity = '1';
+            if (strumContainer) strumContainer.style.opacity = '1';
+        }
     },
 
     removeStrum: (index) => {

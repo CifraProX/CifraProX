@@ -142,6 +142,10 @@
                         style="margin-bottom: 0.5rem; color: var(--primary-color); font-weight: 500; font-size: 1.2rem; margin-top: 0;">
                         Artista</p>
                 </div>
+                <div id="cifra-mode-toggle" class="mode-toggle-container" style="display:none;">
+                    <button class="btn-mode active" onclick="app.setContentView('lyrics')" id="btn-mode-lyrics">Letra</button>
+                    <button class="btn-mode" onclick="app.setContentView('tabs')" id="btn-mode-tabs">Tablatura</button>
+                </div>
             </div>
 
             <div id="view-meta"
@@ -166,6 +170,7 @@
             </div>
 
             <div class="cifra-content" id="view-content" style="font-family: monospace; font-size: 18px;"></div>
+            <div class="cifra-content hidden" id="view-tabs" style="font-family: monospace; font-size: 18px; white-space: pre; overflow-x: auto;"></div>
 
             <!-- Autoscroll Controls -->
             <div id="loop-countdown" style="display:none;">
@@ -345,6 +350,13 @@
                         style="width: 100%; height: 100%; border: 1px solid var(--border-color); border-radius: 8px; background: white; padding: 1rem; overflow-y: auto; font-family: monospace; font-size: 15px; white-space: pre-wrap; position: relative;">
                         <!-- O conteúdo renderizado vai aqui -->
                     </div>
+                </div>
+
+                <div class="tabs-editor-container" style="margin-top: 2rem;">
+                    <label>Solo / Tablatura / Dedilhado</label>
+                    <textarea name="tabs" id="edit-tabs" 
+                        style="width: 100%; height: 200px; resize: vertical; font-family: monospace; font-size: 15px; line-height: 1.2; white-space: pre; border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem;"
+                        placeholder="Cole aqui solos, tablaturas ou orientações extras..."></textarea>
                 </div>
             </div>
             <div
