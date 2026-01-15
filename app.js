@@ -543,7 +543,15 @@ const app = {
             contentHtml = contentHtml.replace(/\[([^\]]+)\]/g, (match, chordName) => {
                 if (chordName.startsWith('|') || chordName.startsWith('.')) return match;
                 const cleanName = chordName.replace(/[\[\]\*]/g, '');
-                return `<b class="interactive-chord" onclick="app.highlightChord('${cleanName}')">${cleanName}</b>`;
+
+                const openB = '<span class="chord-bracket">[</span>';
+                const closeB = '<span class="chord-bracket">]</span>';
+
+                if (app.isActualChord(cleanName)) {
+                    return `${openB}<b class="interactive-chord" onclick="app.highlightChord('${cleanName}')">${cleanName}</b>${closeB}`;
+                } else {
+                    return `${openB}<b class="section-marker">${cleanName}</b>${closeB}`;
+                }
             });
 
             const contentDiv = document.getElementById('view-content');
@@ -1056,7 +1064,15 @@ const app = {
             if (match.includes('Loop')) return match;
             if (match.includes('<')) return match; // Already processed
             const cleanName = chord.replace(/[\[\]\*]/g, '');
-            return `<b class="interactive-chord" style="color:var(--primary-color); cursor:pointer;">${cleanName}</b>`;
+
+            const openB = '<span class="chord-bracket">[</span>';
+            const closeB = '<span class="chord-bracket">]</span>';
+
+            if (app.isActualChord(cleanName)) {
+                return `${openB}<b class="interactive-chord" style="color:var(--chord-color); cursor:pointer;">${cleanName}</b>${closeB}`;
+            } else {
+                return `${openB}<b class="section-marker" style="color:var(--primary-color); font-weight:700;">${cleanName}</b>${closeB}`;
+            }
         });
 
         preview.innerHTML = formatted;

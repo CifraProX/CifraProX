@@ -471,9 +471,26 @@ textarea {
     color: var(--chord-color);
     font-weight: 700;
     cursor: pointer;
-    padding: 0 2px;
+    padding: 0;
     border-radius: 4px;
     transition: background 0.2s;
+}
+
+.cifra-content b.section-marker {
+    color: var(--primary-color);
+    font-weight: 700;
+    padding: 0;
+}
+
+.chord-bracket {
+    visibility: hidden;
+    width: 0;
+    /* Just a safety, though in monospace visibility/opacity is better */
+    display: inline-block;
+    width: 1ch;
+    /* Ensures it takes exactly one character space */
+    overflow: hidden;
+    vertical-align: bottom;
 }
 
 .cifra-content b.interactive-chord:hover {
