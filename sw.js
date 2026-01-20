@@ -1,11 +1,11 @@
-const CACHE_NAME = 'cifraprox-v35';
+const CACHE_NAME = 'cifraprox-v36';
 const ASSETS = [
     './',
     './index.html',
     './style.css',
     './app.js',
     './chords.js',
-    './logo.png',
+    'logo.png',
     './manifest.json',
     './icons/abafado para baixo.svg',
     './icons/abafado para cima.svg',
@@ -17,7 +17,11 @@ const ASSETS = [
     './icons/genero_mpb.svg',
     './icons/genero_rock.svg',
     './icons/genero_sertanejo.svg',
-    './icons/repertorio.svg'
+    './icons/repertorio.svg',
+    'https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js',
+    'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js',
+    'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js',
+    'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'
 ];
 
 self.addEventListener('install', (event) => {

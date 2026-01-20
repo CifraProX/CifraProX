@@ -30,6 +30,11 @@ const app = {
         try {
             console.log('Iniciando app (Firebase Mode)...');
 
+            // Robust check for Firebase availability (especially for offline)
+            if (typeof firebase === 'undefined') {
+                throw new Error('O SDK do Firebase não pôde ser carregado. Verifique sua conexão ou o cache do navegador.');
+            }
+
             // Initialize Firebase
             if (!firebase.apps.length) {
                 firebase.initializeApp(app.firebaseConfig);
