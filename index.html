@@ -69,34 +69,38 @@
 
     <!-- Templates -->
     <template id="view-home">
-        <div class="actions" style="margin-bottom: 2rem; align-items: center;">
-            <div class="filters-container">
-                <div class="search-box">
-                    <input type="text" id="filter-search" placeholder="Pesquisar..." oninput="app.filterCifras()">
+        <div class="actions" style="margin-bottom: 2rem;">
+            <div class="home-controls">
+                <div class="filters-container">
+                    <div class="search-box">
+                        <input type="text" id="filter-search" placeholder="Pesquisar..." oninput="app.filterCifras()">
+                    </div>
+                    <div class="filter-selectors">
+                        <select id="filter-genre" class="filter-select" onchange="app.filterCifras()">
+                            <option value="">Gênero</option>
+                            <option value="Sertanejo">Sertanejo</option>
+                            <option value="Rock">Rock</option>
+                            <option value="MPB">MPB</option>
+                            <option value="Acústico">Acústico</option>
+                        </select>
+                        <select id="filter-capo" class="filter-select" onchange="app.filterCifras()">
+                            <option value="">Capo</option>
+                            <option value="Sem Capo">Sem Capo</option>
+                            <option value="1ª Casa">1ª Casa</option>
+                            <option value="2ª Casa">2ª Casa</option>
+                            <option value="3ª Casa">3ª Casa</option>
+                            <option value="4ª Casa">4ª Casa</option>
+                            <option value="5ª Casa">5ª Casa</option>
+                            <option value="6ª Casa">6ª Casa</option>
+                            <option value="7ª Casa">7ª Casa</option>
+                            <option value="8ª Casa">8ª Casa</option>
+                            <option value="9ª Casa">9ª Casa</option>
+                        </select>
+                    </div>
                 </div>
-                <select id="filter-genre" class="filter-select" onchange="app.filterCifras()">
-                    <option value="">Gênero</option>
-                    <option value="Sertanejo">Sertanejo</option>
-                    <option value="Rock">Rock</option>
-                    <option value="MPB">MPB</option>
-                    <option value="Acústico">Acústico</option>
-                </select>
-                <select id="filter-capo" class="filter-select" onchange="app.filterCifras()">
-                    <option value="">Capo</option>
-                    <option value="Sem Capo">Sem Capo</option>
-                    <option value="1ª Casa">1ª Casa</option>
-                    <option value="2ª Casa">2ª Casa</option>
-                    <option value="3ª Casa">3ª Casa</option>
-                    <option value="4ª Casa">4ª Casa</option>
-                    <option value="5ª Casa">5ª Casa</option>
-                    <option value="6ª Casa">6ª Casa</option>
-                    <option value="7ª Casa">7ª Casa</option>
-                    <option value="8ª Casa">8ª Casa</option>
-                    <option value="9ª Casa">9ª Casa</option>
-                </select>
+                <button class="btn btn-create" onclick="app.navigate('editor')" id="btn-create" style="display:none;">+
+                    Nova</button>
             </div>
-            <button class="btn btn-create" onclick="app.navigate('editor')" id="btn-create"
-                style="display:none; margin-left: auto;">+ Nova</button>
         </div>
         <div class="cifra-grid" id="cifra-list">
             <!-- Cifras here -->

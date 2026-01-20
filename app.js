@@ -194,6 +194,9 @@ const app = {
         } else if (view === 'login') {
             // No specific logic needed, form is in template
         }
+
+        // Update offline banner visibility (home only)
+        app.updateNetworkStatus();
     },
 
     toggleTheme: () => {
@@ -213,10 +216,15 @@ const app = {
     },
 
     updateNetworkStatus: () => {
-        if (navigator.onLine) {
-            document.body.classList.remove('is-offline');
-        } else {
-            document.body.classList.add('is-offline');
+        const isOffline = !navigator.onLine;
+        const banner = document.getElementById('offline-status');
+        if (banner) {
+            // Only show banner if offline AND on home view
+            if (isOffline && (app.state.currentView === 'home' || !app.state.currentView)) {
+                banner.style.display = 'block';
+            } else {
+                banner.style.display = 'none';
+            }
         }
     },
 
