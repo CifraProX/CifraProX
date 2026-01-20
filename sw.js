@@ -48,3 +48,19 @@ self.addEventListener('activate', (event) => {
     );
 });
 
+self.addEventListener('fetch', (event) => {
+    event.respondWith(
+        caches.match(event.request).then((response) => {
+            // Retorna o cache se encontrar, senão vai para a rede
+            return response || fetch(event.request).then((networkResponse) => {
+                // Opcional: Você poderia colocar recursos dinâmicos no cache aqui
+                return networkResponse;
+            });
+        }).catch(() => {
+            // Fallback para quando falha cache e rede (opcional)
+            if (event.request.mode === 'navigate') {
+                return caches.match('./index.html');
+            }
+        })
+    );
+});

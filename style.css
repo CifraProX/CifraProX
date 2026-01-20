@@ -185,6 +185,7 @@ nav {
     text-decoration: none;
     font-size: 0.95rem;
     cursor: pointer;
+    white-space: nowrap;
 }
 
 .btn {
@@ -687,6 +688,67 @@ textarea {
     }
 }
 
+/* Specific Mobile Refinements */
+@media (max-width: 600px) {
+    header {
+        padding: 0.75rem 0;
+    }
+
+    nav {
+        gap: 0.5rem;
+    }
+
+    .logo {
+        font-size: 1.4rem;
+    }
+
+    .nav-container {
+        gap: 0.75rem;
+    }
+
+    .nav-links {
+        gap: 0.8rem;
+    }
+
+    .nav-link {
+        font-size: 0.85rem;
+    }
+
+    main {
+        padding: 1rem;
+    }
+
+    .actions {
+        flex-direction: column;
+        align-items: stretch !important;
+        gap: 1rem;
+    }
+
+    .filters-container {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .search-box {
+        max-width: none;
+        width: 100%;
+    }
+
+    .filter-select {
+        width: 100%;
+    }
+
+    .btn-create {
+        margin-left: 0 !important;
+        width: 100%;
+        justify-content: center;
+    }
+
+    .cifra-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* Batida Icons */
 .btn-icon {
     padding: 0.4rem;
@@ -1041,8 +1103,8 @@ textarea {
 
 @media print {
     body {
-        background-color: var(--bg-color) !important;
-        color: var(--text-color) !important;
+        background-color: white !important;
+        color: #000000 !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
     }
@@ -1053,7 +1115,9 @@ textarea {
     #setlist-navigator,
     #theme-toggle,
     .btn-theme,
-    .cifra-visual-actions {
+    .cifra-visual-actions,
+    .cifra-top-actions,
+    #cifra-mode-toggle {
         display: none !important;
     }
 
@@ -1066,17 +1130,74 @@ textarea {
 
     #app {
         padding: 0 !important;
+        background-color: white !important;
     }
 
+    /* Song Title - DARK BLUE and BOLD */
+    #view-title {
+        color: #1e3a8a !important;
+        /* Blue 900 - Navy/Dark Blue */
+        font-size: 3.5rem !important;
+        font-weight: 800 !important;
+        margin-bottom: 2px !important;
+        margin-top: 0 !important;
+        line-height: 1 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    #view-artist {
+        color: #059669 !important;
+        /* Emerald */
+        font-size: 1.6rem !important;
+        font-weight: 600 !important;
+        margin-top: 5px !important;
+        margin-bottom: 25px !important;
+    }
+
+    /* Components keep the DARK 'Premium' look on the WHITE page */
     .cifra-content {
-        font-size: 16px !important;
-        color: var(--text-color) !important;
+        font-size: 17px !important;
+        color: #f1f5f9 !important;
+        background-color: #1e293b !important;
+        border: 1px solid #334155 !important;
+        padding: 2rem !important;
+        border-radius: 12px !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        line-height: 1.6 !important;
+    }
+
+    .cifra-content b.interactive-chord {
+        color: #34d399 !important;
+        /* Chords highlight */
+        font-weight: 700 !important;
+    }
+
+    .cifra-content b.section-marker {
+        color: #10b981 !important;
     }
 
     .chord-card {
         break-inside: avoid;
-        background: var(--card-bg) !important;
-        border: 1px solid var(--border-color) !important;
+        background-color: #1e293b !important;
+        border: 1px solid #334155 !important;
+        border-radius: 8px !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    .chord-name {
+        color: #34d399 !important;
+    }
+
+    #view-strumming-container {
+        background-color: #1e293b !important;
+        border: 1px dashed #334155 !important;
+        break-inside: avoid;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color: #f1f5f9 !important;
     }
 
     /* Preserve colors for chord drawings */
@@ -1084,10 +1205,35 @@ textarea {
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
     }
+
+    /* Page breaks and spacing */
+    .cifra-header {
+        margin-bottom: 20px !important;
+    }
 }
 
 /* Strumming Editor Focus */
 #edit-strumming-preview:focus {
     border-color: var(--primary-color) !important;
     box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1) !important;
+}
+
+/* Offline Indicator */
+#offline-status {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background: #4b5563;
+    color: white;
+    text-align: center;
+    font-size: 0.75rem;
+    padding: 2px;
+    z-index: 9999;
+    display: none;
+    font-weight: 600;
+}
+
+body.is-offline #offline-status {
+    display: block;
 }

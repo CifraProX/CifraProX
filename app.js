@@ -37,6 +37,18 @@ const app = {
             app.db = firebase.firestore();
             app.auth = firebase.auth();
 
+            // Ativar Persistência Offline do Firestore
+            try {
+                await app.db.enablePersistence({ synchronizeTabs: true });
+                console.log('Persistência offline ativada!');
+            } catch (err) {
+                if (err.code == 'failed-precondition') {
+                    console.warn('Persistência falhou: Múltiplas abas abertas.');
+                } else if (err.code == 'unimplemented') {
+                    console.warn('Persistência não suportada pelo navegador.');
+                }
+            }
+
             // Initialize Theme
             const savedTheme = localStorage.getItem('theme') || 'light';
             if (savedTheme === 'dark') {
@@ -47,8 +59,14 @@ const app = {
             // Load custom chords on startup
             await app.loadCustomChords();
 
+            // Start listening immediately (as guest)
+            app.initRealtimeListeners();
+
             // Listen for Auth changes
             app.auth.onAuthStateChanged((user) => {
+                // Clear state when auth changes to ensure correct data per access level
+                app.state.cifras = [];
+
                 if (user) {
                     app.state.user = {
                         uid: user.uid,
@@ -56,12 +74,14 @@ const app = {
                         username: 'Admin',
                         role: 'admin'
                     };
-                    app.initRealtimeListeners();
                 } else {
                     app.state.user = null;
-                    app.stopRealtimeListeners();
-                    if (app.state.currentView === 'home') app.loadCifras();
+                    app.stopRealtimeListeners(); // Just to be clean before restart
                 }
+
+                // Re-initialize listeners with new user state
+                app.initRealtimeListeners();
+
                 app.renderHeader(app.state.currentView);
 
                 // Update Home UI elements (Create Button)
@@ -93,6 +113,11 @@ const app = {
                     }
                 }
             };
+
+            // Monitor de Rede (Offline)
+            window.addEventListener('online', app.updateNetworkStatus);
+            window.addEventListener('offline', app.updateNetworkStatus);
+            app.updateNetworkStatus();
 
             // Setup inicial
             const view = location.hash ? location.hash.substring(1).split('/')[0] : 'home';
@@ -179,6 +204,14 @@ const app = {
         if (sun && moon) {
             sun.style.display = isDark ? 'block' : 'none';
             moon.style.display = isDark ? 'none' : 'block';
+        }
+    },
+
+    updateNetworkStatus: () => {
+        if (navigator.onLine) {
+            document.body.classList.remove('is-offline');
+        } else {
+            document.body.classList.add('is-offline');
         }
     },
 
@@ -283,12 +316,20 @@ const app = {
     initRealtimeListeners: () => {
         app.stopRealtimeListeners();
 
+        // Query base: Se não estiver logado, vê apenas prontas. Se logado, vê tudo.
+        let query = app.db.collection('cifras');
+        if (!app.state.user) {
+            query = query.where('ready', '==', true);
+        }
+
         // Listen to Cifras - Sort in memory to avoid index requirements
-        app.state.unsubs.cifras = app.db.collection('cifras').onSnapshot(snap => {
+        app.state.unsubs.cifras = query.onSnapshot(snap => {
             const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             data.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
             app.state.cifras = data;
             if (app.state.currentView === 'home') app.filterCifras();
+        }, error => {
+            console.error('Erro no listener de cifras:', error);
         });
 
         // Listen to Setlists
@@ -328,29 +369,18 @@ const app = {
     // --- FIRESTORE OPERATIONS ---
 
     loadCifras: async () => {
-        // If logged in and we already have data in state, just render it.
-        // The realtime listener handles future updates.
-        if (app.state.user && app.state.cifras.length > 0) {
+        const list = document.getElementById('cifra-list');
+        if (!list) return;
+
+        // Se já temos dados no estado (carregados pelo listener tempo real), apenas renderiza
+        if (app.state.cifras.length > 0) {
             app.filterCifras();
             return;
         }
 
-        const list = document.getElementById('cifra-list');
-        if (!list) return;
-
         list.innerHTML = '<p style="color:var(--text-muted)">Carregando...</p>';
-
-        try {
-            // Guest mode: only ready songs
-            const snapshot = await app.db.collection('cifras').where('ready', '==', true).get();
-            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            data.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
-            app.state.cifras = data;
-            app.filterCifras();
-        } catch (e) {
-            console.error(e);
-            list.innerHTML = '<p style="color:red">Erro ao carregar do Firebase.</p>';
-        }
+        // Com a unificação, NÃO fazemos mais o fetch manual aqui.
+        // O initRealtimeListeners iniciado no app.init() cuidará de popular o estado.
     },
 
     filterCifras: () => {
