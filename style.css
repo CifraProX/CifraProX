@@ -1212,8 +1212,8 @@ textarea {
     border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* Mobile Adjustments (Precedence) */
-@media (max-width: 600px) {
+/* Mobile Adjustments (Robust) */
+@media screen and (max-width: 600px) {
     header {
         padding: 0.75rem 0;
     }
@@ -1236,18 +1236,10 @@ textarea {
     }
 
     .nav-links {
-        gap: 1rem;
-        overflow-x: auto;
-        padding: 4px 0;
-        scrollbar-width: none;
-        -ms-overflow-style: none;
+        gap: 0.8rem;
         display: flex;
         align-items: center;
         justify-content: flex-end;
-    }
-
-    .nav-links::-webkit-scrollbar {
-        display: none;
     }
 
     .nav-link {
@@ -1257,65 +1249,56 @@ textarea {
     }
 
     main {
-        padding: 1.5rem 1rem;
+        padding: 1rem;
     }
 
     .home-controls {
         display: grid !important;
         grid-template-columns: 1fr auto !important;
-        gap: 0.8rem;
-        align-items: center;
-        max-width: 500px;
-        margin: 0 auto;
+        grid-template-rows: auto auto !important;
+        gap: 0.8rem !important;
+        align-items: flex-start;
     }
 
     .filters-container {
+        grid-column: 1;
         display: flex !important;
         flex-direction: column !important;
-        gap: 0.8rem !important;
-        grid-column: 1;
-        background: transparent !important;
-        padding: 0 !important;
-        box-shadow: none !important;
+        gap: 0.8rem;
+        width: 100% !important;
     }
 
     .search-box {
         width: 100% !important;
-        max-width: none !important;
     }
 
     .filter-selectors {
         display: flex !important;
         flex-direction: row !important;
+        flex-wrap: nowrap !important;
         gap: 0.8rem !important;
         width: 100% !important;
+        align-items: center;
+    }
+
+    .filter-select {
+        flex: 1 1 0 !important;
+        width: 0 !important;
+        /* Allow flex to control width entirely */
+        min-width: 0 !important;
+        padding: 0.6rem 0.5rem !important;
+        font-size: 0.85rem !important;
     }
 
     .btn-create {
         grid-column: 2;
         grid-row: 1 / span 2;
-        align-self: center;
+        align-self: stretch;
         margin: 0 !important;
-        height: 44px;
-        padding: 0 1.2rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 8px;
-    }
-
-    .filter-select {
-        width: 100% !important;
-        min-width: 0 !important;
-        flex: 1 !important;
+        padding: 0 1rem;
     }
 
     .cifra-grid {
         grid-template-columns: 1fr !important;
     }
-}
-
-
-body.is-offline #offline-status {
-    /* Removed global display:block to allow app.js control */
 }
