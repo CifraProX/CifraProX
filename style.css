@@ -1285,8 +1285,8 @@ textarea {
     }
 
     .filter-selectors {
-        display: grid !important;
-        grid-template-columns: 1fr 1fr !important;
+        display: flex !important;
+        flex-direction: row !important;
         gap: 0.8rem !important;
         width: 100% !important;
     }
