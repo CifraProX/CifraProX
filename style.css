@@ -287,106 +287,6 @@ nav {
     max-width: 400px;
 }
 
-@media (max-width: 600px) {
-    header {
-        padding: 0.75rem 0;
-    }
-
-    nav {
-        gap: 0.5rem;
-    }
-
-    .logo {
-        font-size: 1.3rem;
-        flex-shrink: 0;
-    }
-
-    .nav-container {
-        gap: 0.5rem;
-        flex: 1;
-    }
-
-    .nav-links {
-        gap: 1rem;
-        overflow-x: auto;
-        padding: 4px 0;
-        scrollbar-width: none;
-        -ms-overflow-style: none;
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
-        flex: 1;
-    }
-
-    .nav-links::-webkit-scrollbar {
-        display: none;
-    }
-
-    .nav-link {
-        font-size: 0.85rem;
-        flex-shrink: 0;
-        white-space: nowrap;
-    }
-
-    main {
-        padding: 1.5rem 1rem;
-    }
-
-    .home-controls {
-        display: grid;
-        grid-template-columns: 1fr auto;
-        gap: 0.8rem;
-        align-items: center;
-        /* Vertically center everything in the grid */
-        max-width: 500px;
-        margin: 0 auto;
-        /* Center the entire block */
-    }
-
-    .filters-container {
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-        grid-column: 1;
-    }
-
-    .search-box {
-        width: 100%;
-        max-width: none;
-    }
-
-    .filter-selectors {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 0.5rem;
-        width: 100%;
-    }
-
-    .btn-create {
-        grid-column: 2;
-        grid-row: 1 / span 2;
-        align-self: center;
-        /* Center vertically between the two rows */
-        margin: 0 !important;
-        height: 44px;
-        /* Fixed height to keep it looking like a button */
-        padding: 0 1.2rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 8px;
-        /* Slightly more rounded like the print */
-    }
-
-    .filter-select {
-        width: 100%;
-        min-width: 0;
-    }
-
-    .cifra-grid {
-        grid-template-columns: 1fr;
-    }
-}
 
 .btn-small {
     padding: 3px 10px !important;
@@ -1311,6 +1211,110 @@ textarea {
     font-weight: 500;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
+
+/* Mobile Adjustments (Precedence) */
+@media (max-width: 600px) {
+    header {
+        padding: 0.75rem 0;
+    }
+
+    nav {
+        gap: 0.5rem;
+    }
+
+    .logo {
+        font-size: 1.3rem;
+        flex-shrink: 0;
+    }
+
+    .nav-container {
+        gap: 0.5rem;
+        flex: 1;
+        justify-content: flex-end;
+        display: flex;
+        align-items: center;
+    }
+
+    .nav-links {
+        gap: 1rem;
+        overflow-x: auto;
+        padding: 4px 0;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+    }
+
+    .nav-links::-webkit-scrollbar {
+        display: none;
+    }
+
+    .nav-link {
+        font-size: 0.85rem;
+        flex-shrink: 0;
+        white-space: nowrap;
+    }
+
+    main {
+        padding: 1.5rem 1rem;
+    }
+
+    .home-controls {
+        display: grid !important;
+        grid-template-columns: 1fr auto !important;
+        gap: 0.8rem;
+        align-items: center;
+        max-width: 500px;
+        margin: 0 auto;
+    }
+
+    .filters-container {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0.8rem !important;
+        grid-column: 1;
+        background: transparent !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+    }
+
+    .search-box {
+        width: 100% !important;
+        max-width: none !important;
+    }
+
+    .filter-selectors {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 0.8rem !important;
+        width: 100% !important;
+    }
+
+    .btn-create {
+        grid-column: 2;
+        grid-row: 1 / span 2;
+        align-self: center;
+        margin: 0 !important;
+        height: 44px;
+        padding: 0 1.2rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+    }
+
+    .filter-select {
+        width: 100% !important;
+        min-width: 0 !important;
+        flex: 1 !important;
+    }
+
+    .cifra-grid {
+        grid-template-columns: 1fr !important;
+    }
+}
+
 
 body.is-offline #offline-status {
     /* Removed global display:block to allow app.js control */
