@@ -1290,16 +1290,19 @@ textarea {
     }
 
     .btn-create {
-        grid-column: 2;
-        grid-row: 1 / span 2;
+        grid-column: 2 !important;
+        grid-row: 1 / span 2 !important;
         margin: 0 !important;
-        padding: 0 1rem !important;
-        height: 48px !important;
+        padding: 0 0.8rem !important;
+        height: 34px !important;
+        font-size: 0.75rem !important;
         align-self: center !important;
         display: flex !important;
-        align-items: center;
-        justify-content: center;
-        white-space: nowrap;
+        align-items: center !important;
+        justify-content: center !important;
+        white-space: nowrap !important;
+        border-radius: 6px !important;
+        min-height: unset !important;
     }
 
     .cifra-grid {
