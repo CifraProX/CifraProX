@@ -1257,22 +1257,22 @@ textarea {
         grid-template-columns: 1fr auto !important;
         grid-template-rows: auto auto !important;
         gap: 0.8rem !important;
-        align-items: flex-start;
+        align-items: stretch !important;
     }
 
     .filters-container {
-        grid-column: 1;
-        display: flex !important;
-        flex-direction: column !important;
-        gap: 0.8rem;
-        width: 100% !important;
+        display: contents !important;
     }
 
     .search-box {
+        grid-column: 1;
+        grid-row: 1;
         width: 100% !important;
     }
 
     .filter-selectors {
+        grid-column: 1;
+        grid-row: 2;
         display: flex !important;
         flex-direction: row !important;
         flex-wrap: nowrap !important;
@@ -1284,7 +1284,6 @@ textarea {
     .filter-select {
         flex: 1 1 0 !important;
         width: 0 !important;
-        /* Allow flex to control width entirely */
         min-width: 0 !important;
         padding: 0.6rem 0.5rem !important;
         font-size: 0.85rem !important;
@@ -1293,9 +1292,13 @@ textarea {
     .btn-create {
         grid-column: 2;
         grid-row: 1 / span 2;
-        align-self: stretch;
         margin: 0 !important;
-        padding: 0 1rem;
+        padding: 0 1rem !important;
+        height: auto !important;
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        min-height: 100%;
     }
 
     .cifra-grid {
