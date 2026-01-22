@@ -227,22 +227,25 @@ const app = {
         return match ? match[1] : null;
     },
 
-    toggleMusicPlayer: (forceState = null) => {
+    toggleMusicPlayer: (forceState = null, source = 'original') => {
         const modal = document.getElementById('music-player-modal');
         const container = document.getElementById('music-player-container');
         const titleSpan = document.getElementById('player-song-title');
+        const statusSpan = document.getElementById('player-status');
 
         const newState = forceState !== null ? forceState : (modal.style.display === 'none');
         app.musicPlayerActive = newState;
 
         if (newState) {
-            const url = app.state.currentCifra?.youtube;
+            const url = source === 'training' ? app.state.currentCifra?.youtubeTraining : app.state.currentCifra?.youtube;
             const id = app.extractYouTubeId(url);
             if (!id) {
                 app.showToast('Link do YouTube inválido.');
                 return;
             }
             titleSpan.innerText = app.state.currentCifra.title;
+            statusSpan.innerText = source === 'training' ? 'Vídeo de Treino' : 'Tocando agora';
+            statusSpan.style.color = source === 'training' ? '#10b981' : 'var(--primary-color)';
 
             modal.style.display = 'flex';
             requestAnimationFrame(() => modal.classList.add('active'));
@@ -665,11 +668,18 @@ const app = {
 
             // --- YouTube Setup ---
             const btnYoutube = document.getElementById('btn-youtube-view');
+            const btnTraining = document.getElementById('btn-youtube-training');
+
             if (data.youtube) {
                 btnYoutube.style.display = 'flex';
-                // No need for onclick here as it's in the HTML now (app.toggleMusicPlayer)
             } else {
                 btnYoutube.style.display = 'none';
+            }
+
+            if (data.youtubeTraining && app.state.user) {
+                btnTraining.style.display = 'flex';
+            } else {
+                btnTraining.style.display = 'none';
             }
             // Populate logic same as before...
 
@@ -1226,6 +1236,7 @@ const app = {
         document.getElementById('edit-genre').value = cifra.genre || '';
         document.getElementById('edit-bpm').value = cifra.bpm || '';
         document.getElementById('edit-youtube').value = cifra.youtube || '';
+        document.getElementById('edit-youtubeTraining').value = cifra.youtubeTraining || '';
         const strum = cifra.strumming || '';
         document.getElementById('edit-strumming').value = strum;
         document.getElementById('edit-ready').checked = !!cifra.ready;

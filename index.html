@@ -7,7 +7,7 @@
     <title>CifraProX - Suas Cifras</title>
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <script src="https://www.youtube.com/iframe_api"></script>
-    <link rel="stylesheet" href="style.css?v=27">
+    <link rel="stylesheet" href="style.css?v=28">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#1a2e25">
@@ -196,13 +196,18 @@
                     style="display:none; background: #f3e5f5; color: #4a148c; padding: 2px 8px; border-radius: 4px; font-weight: 500;"></span>
 
                 <div class="cifra-top-actions no-print" style="display:flex; gap: 0.5rem; align-items: center;">
-                    <button id="btn-youtube-view" class="btn btn-music btn-small"
-                        style="display:none; align-items:center; gap: 4px;" onclick="app.toggleMusicPlayer()">
+                    Ouvir Música
+                    </button>
+
+                    <button id="btn-youtube-training" class="btn btn-outline btn-small"
+                        style="display:none; align-items:center; gap: 4px; border-color: #10b981; color: #10b981;"
+                        onclick="app.toggleMusicPlayer(null, 'training')">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                            <path d="M22 10v6M2 10l10-5 10 5-10 5z"></path>
+                            <path d="M6 12v5c3 3 9 3 12 0v-5"></path>
                         </svg>
-                        Ouvir Música
+                        Vídeo de Treino
                     </button>
 
                     <!-- Compact Audio Player -->
@@ -356,6 +361,11 @@
                     <label>YouTube (URL de Referência)</label>
                     <input type="url" name="youtube" id="edit-youtube" placeholder="https://youtube.com/watch?v=..."
                         style="width:100%;">
+                </div>
+                <div class="input-group">
+                    <label>YouTube (Vídeo de Treino - Restrito)</label>
+                    <input type="url" name="youtubeTraining" id="edit-youtubeTraining"
+                        placeholder="Ex: aula, tutorial, etc." style="width:100%;">
                 </div>
             </div>
 
@@ -533,7 +543,7 @@
         }
     </script>
     <script src="chords.js?v=24"></script>
-    <script src="app.js?v=29"></script>
+    <script src="app.js?v=30"></script>
 </body>
 
 </html>
