@@ -5,7 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CifraProX - Suas Cifras</title>
-    <link rel="stylesheet" href="style.css?v=24">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <link rel="stylesheet" href="style.css?v=26">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#1a2e25">
@@ -194,16 +196,38 @@
                     style="display:none; background: #f3e5f5; color: #4a148c; padding: 2px 8px; border-radius: 4px; font-weight: 500;"></span>
 
                 <div class="cifra-top-actions no-print" style="display:flex; gap: 0.5rem; align-items: center;">
-                    <button id="btn-youtube-view" class="btn btn-outline btn-small"
-                        style="display:none; align-items:center; gap: 4px;" onclick="app.openYouTube()">
+                    <button id="btn-youtube-view" class="btn btn-music btn-small"
+                        style="display:none; align-items:center; gap: 4px;" onclick="app.toggleMusicPlayer()">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path
-                                d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z" />
-                            <polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02" />
+                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
                         </svg>
-                        YouTube
+                        Ouvir Música
                     </button>
+
+                    <!-- Compact Audio Player -->
+                    <div id="music-player-modal" class="music-player-modal" style="display:none;">
+                        <div class="music-player-content">
+                            <div class="music-player-body">
+                                <div class="audio-info">
+                                    <div class="music-icon-animated">
+                                        <span></span><span></span><span></span><span></span>
+                                    </div>
+                                    <div class="audio-text">
+                                        <span id="player-song-title">Ouvindo...</span>
+                                        <span id="player-status">Tocando agora</span>
+                                    </div>
+                                </div>
+                                <div class="player-controls">
+                                    <button class="btn-close-player" onclick="app.toggleMusicPlayer(false)">✕</button>
+                                </div>
+                            </div>
+                            <!-- Mini Video/Audio Player Area -->
+                            <div id="player-iframe-wrapper" class="player-iframe-wrapper">
+                                <div id="music-player-container"></div>
+                            </div>
+                        </div>
+                    </div>
                     <button class="btn btn-outline btn-small" onclick="window.print()"
                         style="display:flex; align-items:center; gap: 4px;">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -509,7 +533,7 @@
         }
     </script>
     <script src="chords.js?v=24"></script>
-    <script src="app.js?v=24"></script>
+    <script src="app.js?v=28"></script>
 </body>
 
 </html>

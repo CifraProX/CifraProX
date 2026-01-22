@@ -146,6 +146,11 @@ const app = {
             }
         }
 
+        // Stop player when navigating
+        if (app.musicPlayerActive) {
+            app.toggleMusicPlayer(false);
+        }
+
         // Atualiza histórico se necessário
         if (!fromHistory) {
             const hash = '#' + view + (param ? '/' + param : '');
@@ -212,6 +217,87 @@ const app = {
         if (sun && moon) {
             sun.style.display = isDark ? 'block' : 'none';
             moon.style.display = isDark ? 'none' : 'block';
+        }
+    },
+
+    extractYouTubeId: (url) => {
+        if (!url) return null;
+        const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+        const match = url.match(regex);
+        return match ? match[1] : null;
+    },
+
+    toggleMusicPlayer: (forceState = null) => {
+        const modal = document.getElementById('music-player-modal');
+        const container = document.getElementById('music-player-container');
+        const titleSpan = document.getElementById('player-song-title');
+
+        const newState = forceState !== null ? forceState : (modal.style.display === 'none');
+        app.musicPlayerActive = newState;
+
+        if (newState) {
+            const url = app.state.currentCifra?.youtube;
+            const id = app.extractYouTubeId(url);
+            if (!id) {
+                app.showToast('Link do YouTube inválido.');
+                return;
+            }
+            titleSpan.innerText = app.state.currentCifra.title;
+
+            modal.style.display = 'flex';
+            requestAnimationFrame(() => modal.classList.add('active'));
+
+            const isLocalFile = window.location.protocol === 'file:';
+            const origin = isLocalFile ? null : window.location.origin;
+
+            // Se o player já existe, apenas carregar novo vídeo
+            if (app.ytPlayer && typeof app.ytPlayer.loadVideoById === 'function') {
+                app.ytPlayer.loadVideoById(id);
+            } else {
+                // Criar player usando a API oficial
+                if (typeof YT !== 'undefined' && YT.Player) {
+                    app.ytPlayer = new YT.Player('music-player-container', {
+                        height: '157',
+                        width: '280',
+                        host: 'https://www.youtube-nocookie.com',
+                        videoId: id,
+                        playerVars: {
+                            'autoplay': 1,
+                            'playsinline': 1,
+                            'rel': 0,
+                            'showinfo': 0,
+                            'modestbranding': 1,
+                            'enablejsapi': 1,
+                            'origin': origin,
+                            'widget_referrer': window.location.href
+                        },
+                        events: {
+                            'onReady': (event) => {
+                                event.target.playVideo();
+                            },
+                            'onError': (event) => {
+                                console.warn('YouTube Player Error:', event.data);
+                                if (isLocalFile && event.data === 153) {
+                                    app.showToast('Nota: Alguns vídeos de música só tocam quando o site está online (GitHub).');
+                                }
+                            }
+                        }
+                    });
+                } else {
+                    // Fallback
+                    const originParam = origin ? `&origin=${encodeURIComponent(origin)}` : '';
+                    container.innerHTML = `<iframe width="280" height="157" src="https://www.youtube-nocookie.com/embed/${id}?autoplay=1${originParam}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+                }
+            }
+        } else {
+            modal.classList.remove('active');
+            if (app.ytPlayer && typeof app.ytPlayer.pauseVideo === 'function') {
+                app.ytPlayer.pauseVideo();
+            }
+            setTimeout(() => {
+                modal.style.display = 'none';
+                if (!app.ytPlayer) container.innerHTML = '';
+            }, 400);
         }
     },
 
@@ -581,7 +667,7 @@ const app = {
             const btnYoutube = document.getElementById('btn-youtube-view');
             if (data.youtube) {
                 btnYoutube.style.display = 'flex';
-                btnYoutube.onclick = () => window.open(data.youtube, '_blank');
+                // No need for onclick here as it's in the HTML now (app.toggleMusicPlayer)
             } else {
                 btnYoutube.style.display = 'none';
             }
