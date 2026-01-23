@@ -326,8 +326,8 @@ const app = {
             // Only show management actions if logged in AND NOT in a setlist session
             if (app.state.user && !app.state.currentSetlist) {
                 userActions = `
-                    <a href="javascript:void(0)" class="nav-link" onclick="app.editCurrent()">Editar</a>
                     <a href="javascript:void(0)" class="nav-link" style="color:var(--danger-color)" onclick="app.deleteCurrent()">Excluir</a>
+                    <a href="javascript:void(0)" class="nav-link" onclick="app.editCurrent()">Editar</a>
                 `;
             }
             navLinks.innerHTML = `
@@ -347,8 +347,8 @@ const app = {
         // Logic for 'editor' view
         if (view === 'editor') {
             navLinks.innerHTML = `
-                <a href="javascript:void(0)" class="nav-link" style="color:var(--primary-color); font-weight:bold;" onclick="document.querySelector('#app form').requestSubmit()">Salvar Cifra</a>
                 <a href="javascript:void(0)" class="nav-link" style="color:var(--danger-color)" onclick="app.navigate('home')">Cancelar</a>
+                <a href="javascript:void(0)" class="nav-link" style="color:var(--primary-color); font-weight:bold;" onclick="document.querySelector('#app form').requestSubmit()">Salvar Cifra</a>
             `;
             return;
         }
@@ -356,8 +356,8 @@ const app = {
         // Logic for other views (Home, Library, etc)
         if (view === 'setlists') {
             navLinks.innerHTML = `
-                <a href="javascript:void(0)" class="nav-link" style="color:var(--primary-color); font-weight:bold;" onclick="app.promptCreateSetlist()">+ Novo Repertório</a>
                 <a href="javascript:void(0)" class="nav-link" onclick="app.navigate('home')">Voltar</a>
+                <a href="javascript:void(0)" class="nav-link" style="color:var(--primary-color); font-weight:bold;" onclick="app.promptCreateSetlist()">+ Novo Repertório</a>
             `;
             return;
         }

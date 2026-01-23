@@ -1286,6 +1286,74 @@ textarea {
     .cifra-grid {
         grid-template-columns: 1fr !important;
     }
+
+    /* Editor Mobile Improvements */
+    .form-grid {
+        display: grid !important;
+        grid-template-columns: 1fr !important;
+        gap: 1rem !important;
+    }
+
+    .split-headers {
+        grid-template-columns: 1fr !important;
+        gap: 0.5rem !important;
+    }
+
+    .split-headers>div:last-child {
+        display: none !important;
+        /* Hide "Pré-visualização" label on mobile as it's stacked */
+    }
+
+    .split-editor-container {
+        grid-template-columns: 1fr !important;
+        height: auto !important;
+        min-height: 80vh !important;
+        gap: 1.5rem !important;
+    }
+
+    #edit-content {
+        min-height: 40vh !important;
+    }
+
+    #edit-preview {
+        min-height: 40vh !important;
+    }
+}
+
+/* Base classes for Editor (Desktop) */
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.form-grid-2col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.split-headers {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 0.5rem;
+    align-items: end;
+}
+
+.split-editor-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    height: 60vh;
+}
+
+@media screen and (max-width: 600px) {
+    .form-grid-2col {
+        grid-template-columns: 1fr !important;
+    }
 }
 
 /* --- MUSIC PLAYER PREMIUM --- */
