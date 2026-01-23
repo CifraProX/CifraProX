@@ -729,6 +729,13 @@ textarea {
 }
 
 /* Batida Icons */
+.strumming-controls {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    flex-wrap: wrap;
+}
+
 .btn-icon {
     padding: 0.4rem;
     display: flex;
@@ -1215,7 +1222,7 @@ textarea {
 }
 
 /* Mobile Adjustments (Robust) */
-@media screen and (max-width: 600px) {
+@media screen and (max-width: 850px) {
 
     .home-controls {
         display: grid !important;
@@ -1291,7 +1298,34 @@ textarea {
     .form-grid {
         display: grid !important;
         grid-template-columns: 1fr !important;
-        gap: 1rem !important;
+        gap: 1.2rem !important;
+        width: 100% !important;
+    }
+
+    .form-grid .input-group {
+        width: 100% !important;
+    }
+
+    .form-grid-2col {
+        grid-template-columns: 1fr !important;
+        gap: 1.2rem !important;
+    }
+
+    .strumming-controls {
+        gap: 0.6rem !important;
+        justify-content: flex-start !important;
+    }
+
+    .strumming-controls .btn {
+        min-width: 48px !important;
+        height: 48px !important;
+        padding: 0 !important;
+        flex: 0 0 auto !important;
+    }
+
+    .strumming-controls .btn-icon img {
+        width: 28px !important;
+        height: 28px !important;
     }
 
     .split-headers {
@@ -1317,6 +1351,13 @@ textarea {
 
     #edit-preview {
         min-height: 40vh !important;
+    }
+
+    .input-group input,
+    .input-group select {
+        font-size: 16px !important;
+        /* Prevent auto-zoom on iOS */
+        padding: 0.8rem !important;
     }
 }
 
@@ -1350,11 +1391,7 @@ textarea {
     height: 60vh;
 }
 
-@media screen and (max-width: 600px) {
-    .form-grid-2col {
-        grid-template-columns: 1fr !important;
-    }
-}
+
 
 /* --- MUSIC PLAYER PREMIUM --- */
 .btn-music {
