@@ -657,11 +657,11 @@ const app = {
 
             // --- Metronome Setup ---
             app.stopMetronome();
-            if (data.bpm) {
+            if (data.bpm && app.state.user) {
                 app.state.metronome.bpm = parseInt(data.bpm);
                 document.getElementById('metronome-bpm-label').innerText = `BPM: ${data.bpm}`;
                 document.getElementById('metronome-display').style.display = 'flex';
-                app.startMetronome();
+                // app.startMetronome(); // REMOVED: No more auto-start
             } else {
                 document.getElementById('metronome-display').style.display = 'none';
             }
@@ -803,6 +803,14 @@ const app = {
         }
     },
 
+    toggleMetronome: () => {
+        if (app.state.metronome.active) {
+            app.stopMetronome();
+        } else {
+            app.startMetronome();
+        }
+    },
+
     startMetronome: () => {
         const bpm = app.state.metronome.bpm;
         if (!bpm || bpm <= 0) return;
@@ -812,6 +820,30 @@ const app = {
         const dot = document.getElementById('metronome-dot');
 
         app.state.metronome.active = true;
+
+        // Setup Audio for Beep
+        if (!app.audioCtx) {
+            app.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        const playBeep = () => {
+            if (!app.state.metronome.active) return;
+            const osc = app.audioCtx.createOscillator();
+            const gain = app.audioCtx.createGain();
+
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, app.audioCtx.currentTime); // A5 note
+
+            gain.gain.setValueAtTime(0.1, app.audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, app.audioCtx.currentTime + 0.1);
+
+            osc.connect(gain);
+            gain.connect(app.audioCtx.destination);
+
+            osc.start();
+            osc.stop(app.audioCtx.currentTime + 0.1);
+        };
+
         app.state.metronome.interval = setInterval(() => {
             if (dot) {
                 dot.style.background = 'var(--primary-color)';
@@ -821,7 +853,11 @@ const app = {
                     dot.style.transform = 'scale(1)';
                 }, 100);
             }
+            playBeep();
         }, ms);
+
+        // Play first beat immediately
+        playBeep();
     },
 
     stopMetronome: () => {
@@ -830,6 +866,13 @@ const app = {
             app.state.metronome.interval = null;
         }
         app.state.metronome.active = false;
+
+        // Reset dot state
+        const dot = document.getElementById('metronome-dot');
+        if (dot) {
+            dot.style.background = 'var(--text-muted)';
+            dot.style.transform = 'scale(1)';
+        }
     },
 
 

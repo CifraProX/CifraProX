@@ -170,19 +170,23 @@
                         style="margin-bottom: 0.5rem; color: var(--primary-color); font-weight: 500; font-size: 1.2rem; margin-top: 0;">
                         Artista</p>
                 </div>
-                <div id="cifra-mode-toggle" class="mode-toggle-container" style="display:none;">
-                    <button class="btn-mode active" onclick="app.setContentView('lyrics')"
-                        id="btn-mode-lyrics">Letra</button>
-                    <button class="btn-mode" onclick="app.setContentView('tabs')" id="btn-mode-tabs">Tablatura</button>
-                </div>
-                <!-- Metronome Visual Indicator -->
-                <div id="metronome-display"
-                    style="display:none; align-items: center; gap: 8px; background: var(--card-bg); padding: 8px 12px; border-radius: 20px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm);">
-                    <div id="metronome-dot"
-                        style="width: 12px; height: 12px; border-radius: 50%; background: var(--text-muted); transition: background 0.1s;">
+                <div style="display: flex; align-items: center; gap: 1rem; margin-left: auto;">
+                    <div id="cifra-mode-toggle" class="mode-toggle-container" style="display:none;">
+                        <button class="btn-mode active" onclick="app.setContentView('lyrics')"
+                            id="btn-mode-lyrics">Letra</button>
+                        <button class="btn-mode" onclick="app.setContentView('tabs')"
+                            id="btn-mode-tabs">Tablatura</button>
                     </div>
-                    <span id="metronome-bpm-label"
-                        style="font-size: 0.85rem; font-weight: 600; font-variant-numeric: tabular-nums;">BPM: --</span>
+                    <!-- Metronome Visual Indicator -->
+                    <div id="metronome-display" onclick="app.toggleMetronome()"
+                        style="display:none; align-items: center; gap: 8px; background: var(--card-bg); padding: 8px 12px; border-radius: 20px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm); cursor: pointer;">
+                        <div id="metronome-dot"
+                            style="width: 12px; height: 12px; border-radius: 50%; background: var(--text-muted); transition: background 0.1s;">
+                        </div>
+                        <span id="metronome-bpm-label"
+                            style="font-size: 0.85rem; font-weight: 600; font-variant-numeric: tabular-nums;">BPM:
+                            --</span>
+                    </div>
                 </div>
             </div>
 
@@ -364,12 +368,12 @@
                         style="width:100%;">
                 </div>
                 <div class="input-group">
-                    <label>YouTube (URL de Referência)</label>
+                    <label>YouTube</label>
                     <input type="url" name="youtube" id="edit-youtube" placeholder="https://youtube.com/watch?v=..."
                         style="width:100%;">
                 </div>
                 <div class="input-group">
-                    <label>YouTube (Vídeo de Treino - Restrito)</label>
+                    <label>YouTube (Vídeo de Treino)</label>
                     <input type="url" name="youtubeTraining" id="edit-youtubeTraining"
                         placeholder="Ex: aula, tutorial, etc." style="width:100%;">
                 </div>
@@ -546,7 +550,7 @@
         }
     </script>
     <script src="chords.js?v=24"></script>
-    <script src="app.js?v=32"></script>
+    <script src="app.js?v=33"></script>
 </body>
 
 </html>
