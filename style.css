@@ -375,8 +375,10 @@ main {
 }
 
 .search-box input:focus {
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    border-color: var(--primary-color) !important;
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.6) !important;
     transform: translateY(-1px);
+    outline: none !important;
 }
 
 .filter-select {
@@ -399,8 +401,9 @@ main {
 }
 
 .filter-select:focus {
-    outline: none;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    outline: none !important;
+    border-color: var(--primary-color) !important;
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.6) !important;
 }
 
 .cifra-card {

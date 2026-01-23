@@ -7,7 +7,7 @@
     <title>CifraProX - Suas Cifras</title>
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <script src="https://www.youtube.com/iframe_api"></script>
-    <link rel="stylesheet" href="style.css?v=31">
+    <link rel="stylesheet" href="style.css?v=35">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#1a2e25">
@@ -176,16 +176,16 @@
                             id="btn-mode-lyrics">Letra</button>
                         <button class="btn-mode" onclick="app.setContentView('tabs')"
                             id="btn-mode-tabs">Tablatura</button>
-                    </div>
-                    <!-- Metronome Visual Indicator -->
-                    <div id="metronome-display" onclick="app.toggleMetronome()"
-                        style="display:none; align-items: center; gap: 8px; background: var(--card-bg); padding: 8px 12px; border-radius: 20px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm); cursor: pointer;">
-                        <div id="metronome-dot"
-                            style="width: 12px; height: 12px; border-radius: 50%; background: var(--text-muted); transition: background 0.1s;">
+                        <!-- Metronome Integrated -->
+                        <div id="metronome-display" class="btn-mode" onclick="app.toggleMetronome()"
+                            style="display:none; align-items: center; justify-content: center; gap: 6px; cursor: pointer; padding: 4px 12px; height: auto;">
+                            <div id="metronome-dot"
+                                style="width: 10px; height: 10px; border-radius: 50%; background: var(--text-muted); transition: background 0.1s;">
+                            </div>
+                            <span id="metronome-bpm-label"
+                                style="font-size: 0.85rem; font-weight: 600; font-variant-numeric: tabular-nums;">BPM:
+                                --</span>
                         </div>
-                        <span id="metronome-bpm-label"
-                            style="font-size: 0.85rem; font-weight: 600; font-variant-numeric: tabular-nums;">BPM:
-                            --</span>
                     </div>
                 </div>
             </div>

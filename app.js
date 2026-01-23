@@ -724,11 +724,24 @@ const app = {
             // --- Tabs / Solo ---
             const tabsDiv = document.getElementById('view-tabs');
             const toggleContainer = document.getElementById('cifra-mode-toggle');
+            const btnLyrics = document.getElementById('btn-mode-lyrics');
+            const btnTabs = document.getElementById('btn-mode-tabs');
 
-            if (data.tabs && data.tabs.trim()) {
-                tabsDiv.innerText = data.tabs;
+            const hasTabs = !!(data.tabs && data.tabs.trim());
+            const hasBpm = !!(data.bpm && app.state.user);
+
+            if (hasTabs || hasBpm) {
                 toggleContainer.style.display = 'flex';
-                app.setContentView('lyrics'); // Default
+
+                if (hasTabs) {
+                    tabsDiv.innerText = data.tabs;
+                    btnLyrics.style.display = 'inline-block';
+                    btnTabs.style.display = 'inline-block';
+                } else {
+                    btnLyrics.style.display = 'none';
+                    btnTabs.style.display = 'none';
+                }
+                app.setContentView('lyrics'); // Reset to lyrics
             } else {
                 toggleContainer.style.display = 'none';
                 app.setContentView('lyrics');
