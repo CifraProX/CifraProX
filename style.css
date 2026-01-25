@@ -1577,4 +1577,21 @@ body.dark-mode .music-player-modal {
         min-width: 280px;
         width: 90%;
     }
+
+    /* Mobile Text Size Adjustments to prevent wrapping */
+    #view-content,
+    .cifra-content {
+        font-size: 10.5px !important;
+        /* Aggressive reduction to fit chords */
+        padding: 4px !important;
+        /* Minimal padding to maximize width */
+        line-height: 1.4 !important;
+        letter-spacing: -0.3px !important;
+        /* Tighter character spacing */
+        overflow-x: hidden !important;
+        /* Ensure no scrollbar appears as requested */
+        white-space: pre-wrap !important;
+        /* Allow wrap if absolutely necessary, but try to fit */
+        width: 100% !important;
+    }
 }
