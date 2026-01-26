@@ -1045,8 +1045,13 @@ const app = {
             app.renderHeader('cifra'); // Re-run to ensure buttons appear if state matches
 
         } catch (e) {
-            console.error(e);
-            alert('Erro ao carregar cifra do Firebase');
+            console.error('Erro em loadCifra:', e);
+            if (e.code === 'permission-denied') {
+                alert('Acesso negado: Você não tem permissão para visualizar esta cifra (pode ser um Rascunho privado).');
+                app.navigate('home');
+            } else {
+                alert(`Erro ao carregar cifra: ${e.message}`);
+            }
         }
     },
 
@@ -1242,8 +1247,12 @@ const app = {
                 app.navigate('cifra', docRef.id);
             }
         } catch (e) {
-            console.error(e);
-            app.modal({ title: 'Erro', content: 'Erro ao salvar no Firebase. Verifique sua conexão.', confirmText: 'OK', cancelText: null });
+            console.error('Erro em saveCifra:', e);
+            if (e.code === 'permission-denied') {
+                app.modal({ title: 'Permissão Negada', content: 'Você não tem permissão para salvar alterações (apenas Admin?).', confirmText: 'OK', cancelText: null });
+            } else {
+                app.modal({ title: 'Erro', content: `Erro ao salvar: ${e.message}`, confirmText: 'OK', cancelText: null });
+            }
         }
     },
 
@@ -1262,7 +1271,12 @@ const app = {
             app.navigate('home');
             app.showToast('Cifra excluída.');
         } catch (e) {
-            app.modal({ title: 'Erro', content: 'Erro ao excluir do Firebase.', confirmText: 'OK', cancelText: null });
+            console.error('Erro ao excluir:', e);
+            if (e.code === 'permission-denied') {
+                app.modal({ title: 'Erro', content: 'Permissão negada para excluir esta cifra.', confirmText: 'OK', cancelText: null });
+            } else {
+                app.modal({ title: 'Erro', content: `Erro ao excluir: ${e.message}`, confirmText: 'OK', cancelText: null });
+            }
         }
     },
 
