@@ -271,7 +271,7 @@ const app = {
                     app.ytPlayer = new YT.Player('music-player-container', {
                         height: '157',
                         width: '280',
-                        host: 'https://www.youtube-nocookie.com',
+                        host: 'https://www.youtube.com',
                         videoId: id,
                         playerVars: {
                             'autoplay': 1,
@@ -298,7 +298,7 @@ const app = {
                 } else {
                     // Fallback
                     const originParam = origin ? `&origin=${encodeURIComponent(origin)}` : '';
-                    container.innerHTML = `<iframe width="280" height="157" src="https://www.youtube-nocookie.com/embed/${id}?autoplay=1${originParam}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+                    container.innerHTML = `<iframe width="280" height="157" src="https://www.youtube.com/embed/${id}?autoplay=1${originParam}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
                 }
             }
         } else {
