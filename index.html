@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CifraProX - Suas Cifras</title>
+    <title>CifraProX</title>
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <script src="https://www.youtube.com/iframe_api"></script>
     <link rel="stylesheet" href="style.css?v=35">
@@ -327,22 +327,25 @@
             </div>
             <div class="input-group">
                 <label>Artista / Banda</label>
-                <div style="display: flex; gap: 0.5rem; align-items: center;">
-                    <input type="text" name="artist" id="edit-artist" required placeholder="Ex: Legião Urbana"
-                        style="flex: 1;">
-                    <button type="button" class="btn btn-outline" onclick="app.importFromCifraClub()"
-                        style="border-color: var(--primary-color); color: var(--primary-color); font-size: 0.8rem; padding: 0.75rem 1rem; white-space: nowrap;">
-                        ✨ Importar Cifras
-                    </button>
-                </div>
+                <input type="text" name="artist" id="edit-artist" required placeholder="Ex: Legião Urbana">
             </div>
 
             <div class="input-group"
-                style="display: flex; align-items: center; gap: 0.5rem; background: rgba(0,0,0,0.02); padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border-color);">
-                <input type="checkbox" name="ready" id="edit-ready" style="width: auto; margin: 0;">
-                <label for="edit-ready" style="margin: 0; cursor: pointer; color: var(--text-color); font-weight: 500;">
-                    Cifra Pronta (Visível para todos)
-                </label>
+                style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.8rem 1rem; margin-bottom: 2rem; flex-wrap: wrap; background: rgba(16, 185, 129, 0.03); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: var(--shadow-sm);">
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <label class="premium-switch">
+                        <input type="checkbox" name="ready" id="edit-ready">
+                        <span class="premium-slider"></span>
+                    </label>
+                    <label for="edit-ready"
+                        style="margin: 0; cursor: pointer; color: var(--text-color); font-weight: 600; font-size: 0.95rem; letter-spacing: -0.2px;">
+                        Cifra Pronta
+                    </label>
+                </div>
+                <button type="button" class="btn btn-outline" onclick="app.importFromCifraClub()"
+                    style="border-color: var(--primary-color); color: var(--primary-color); font-size: 0.8rem; padding: 0.5rem 1rem; white-space: nowrap; height: 36px; border-radius: 8px; font-weight: 600; transition: all 0.3s ease;">
+                    ✨ Importar Cifras
+                </button>
             </div>
 
             <div class="form-grid">
@@ -390,18 +393,15 @@
                     <input type="url" name="youtubeTraining" id="edit-youtubeTraining"
                         placeholder="Ex: aula, tutorial, etc." style="width:100%;">
                 </div>
-            </div>
-
-            <div class="form-grid-2col">
                 <div class="input-group">
-                    <label>Velocidade Mobile (1-100)</label>
+                    <label>Velocidade Mobile</label>
                     <input type="number" name="scrollSpeedMobile" id="edit-scrollSpeedMobile" min="1" max="100" required
-                        value="1" style="width: 100px;">
+                        value="1" style="width: 100%;">
                 </div>
                 <div class="input-group">
-                    <label>Velocidade Tablet (1-100)</label>
+                    <label>Velocidade Tablet / PC</label>
                     <input type="number" name="scrollSpeed" id="edit-scrollSpeed" min="1" max="100" required value="1"
-                        style="width: 100px;">
+                        style="width: 100%;">
                 </div>
             </div>
 
