@@ -96,7 +96,14 @@ const app = {
             if (!app.state.user) {
                 view = 'login';
             } else if (!view) {
-                view = 'home';
+                // Redirecionar baseado no role do usuário
+                if (app.state.user.role === 'school') {
+                    view = 'school';
+                } else if (app.state.user.role === 'admin') {
+                    view = 'admin';
+                } else {
+                    view = 'home';
+                }
             }
 
             // Fechar popover ao clicar fora
@@ -116,6 +123,32 @@ const app = {
     },
 
     navigate: async (view, param = null, addToHistory = true) => {
+        // --- SECURITY GUARD ---
+        const role = app.state.user ? app.state.user.role : 'guest';
+        
+        console.log('[NAVIGATE DEBUG] View solicitada:', view, '| Role:', role);
+
+        // 1. School Access Logic
+        if (role === 'school') {
+            console.log('[NAVIGATE DEBUG] Usuário é SCHOOL');
+            if (view !== 'school' && view !== 'login') {
+                console.log('[NAVIGATE DEBUG] Forçando redirecionamento para school');
+                view = 'school'; // Force redirect to school dashboard
+            }
+        } else {
+            // 2. Prevent non-schools from accessing school dashboard
+            if (view === 'school') {
+                console.log('[NAVIGATE DEBUG] Não-school tentando acessar school - bloqueado');
+                app.showToast('Acesso negado.');
+                view = 'home';
+            }
+        }
+
+        // 3. Prevent Students from accessing Admin
+        if (view === 'admin' && role !== 'admin') {
+            view = 'home';
+        }
+
         app.state.currentView = view;
         if (addToHistory) {
             history.pushState({ view, param }, '', `#${view}${param ? '/' + param : ''}`);
@@ -126,14 +159,18 @@ const app = {
 
         let templateId = `view-${view}`;
         const template = document.getElementById(templateId);
+        
+        console.log('[NAVIGATE DEBUG] Buscando template:', templateId, '| Encontrado:', !!template);
 
         if (!template) {
-            main.innerHTML = '<div class="flex items-center justify-center h-screen text-red-500">Erro: View não encontrada</div>';
+            console.error('[NAVIGATE DEBUG] Template não encontrado:', templateId);
+            main.innerHTML = '<div class="flex items-center justify-center h-screen text-red-500">Erro: View não encontrada (' + templateId + ')</div>';
             return;
         }
 
         const clone = template.content.cloneNode(true);
         main.appendChild(clone);
+        console.log('[NAVIGATE DEBUG] Template carregado com sucesso');
 
         // Header Updates (Nome do Usuário)
         if (app.state.user) {
@@ -168,6 +205,9 @@ const app = {
             app.loadCifra(param);
         } else if (view === 'admin') {
             app.loadAdminUsers();
+        } else if (view === 'school') {
+            console.log('[NAVIGATE DEBUG] Chamando loadSchoolDashboard()');
+            app.loadSchoolDashboard();
         } else if (view === 'classroom') {
             // Setup classroom (Timer or Init)
         }
@@ -339,8 +379,15 @@ const app = {
             localStorage.setItem('user', JSON.stringify(data.user));
 
             app.state.user = data.user;
-            app.renderHeader('home');
-            app.navigate('home');
+
+            // Redirecionar baseado no role do usuário
+            if (data.user.role === 'school') {
+                app.navigate('school');
+            } else if (data.user.role === 'admin') {
+                app.navigate('admin');
+            } else {
+                app.navigate('home');
+            }
         } catch (error) {
             console.error('Erro no login:', error);
             alert(error.message);
@@ -1839,7 +1886,15 @@ const app = {
             }
 
             app.showToast('Conta criada com sucesso! 🚀');
-            app.navigate('home');
+
+            // Redirecionar baseado no role do usuário
+            if (data.user.role === 'school') {
+                app.navigate('school');
+            } else if (data.user.role === 'admin') {
+                app.navigate('admin');
+            } else {
+                app.navigate('home');
+            }
 
         } catch (e) {
             console.error('Registro falhou:', e);
@@ -2526,6 +2581,143 @@ const app = {
         if (existing) existing.remove();
     },
 
+    // --- SCHOOL CONTROLLER ---
+    loadSchoolDashboard: async () => {
+        console.log('[SCHOOL DEBUG] loadSchoolDashboard iniciado');
+        console.log('[SCHOOL DEBUG] User:', app.state.user);
+        
+        const list = document.getElementById('school-professors-list');
+        const empty = document.getElementById('school-empty-state');
+        const nameDisplay = document.getElementById('school-name-display');
+        
+        console.log('[SCHOOL DEBUG] Elementos encontrados:', {
+            list: !!list,
+            empty: !!empty,
+            nameDisplay: !!nameDisplay
+        });
+
+        if (nameDisplay && app.state.user) nameDisplay.innerText = app.state.user.name;
+        
+        if (!list) {
+            console.error('[SCHOOL DEBUG] Elemento school-professors-list não encontrado!');
+            return;
+        }
+
+        list.innerHTML = '<tr><td colspan="5" class="text-center py-4">Carregando...</td></tr>';
+
+        try {
+            const res = await fetch(`${app.API_URL}/school/professors`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            if (!res.ok) throw new Error('Falha ao carregar');
+            const professors = await res.json();
+
+            list.innerHTML = '';
+            if (professors.length === 0) {
+                empty.classList.remove('hidden');
+                return;
+            }
+            empty.classList.add('hidden');
+
+            professors.forEach(p => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors';
+                const statusBadge = p.status === 'active'
+                    ? '<span class="px-2 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">Ativo</span>'
+                    : '<span class="px-2 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-500">Inativo</span>';
+
+                tr.innerHTML = `
+                    <td class="px-6 py-4 font-bold text-slate-700 dark:text-white">${p.name}</td>
+                    <td class="px-6 py-4">${p.email}</td>
+                    <td class="px-6 py-4">${p.instrument || '-'}</td>
+                    <td class="px-6 py-4">${statusBadge}</td>
+                    <td class="px-6 py-4 text-right">
+                        <button onclick="app.toggleProfessorStatus(${p.id}, '${p.status === 'active' ? 'inactive' : 'active'}')" 
+                            class="text-xs font-bold border rounded px-2 py-1 ${p.status === 'active' ? 'text-red-500 border-red-200 hover:bg-red-50' : 'text-emerald-500 border-emerald-200 hover:bg-emerald-50'}">
+                            ${p.status === 'active' ? 'Desativar' : 'Ativar'}
+                        </button>
+                    </td>
+                `;
+                list.appendChild(tr);
+            });
+        } catch (e) {
+            console.error(e);
+            list.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-500">Erro ao carregar dados.</td></tr>';
+        }
+    },
+
+    modalAddProfessor: () => {
+        const content = `
+            <div class="space-y-4 text-left">
+                <div>
+                    <label class="block text-sm font-bold mb-1">Nome Completo</label>
+                    <input id="new-prof-name" type="text" class="w-full rounded border-slate-300 p-2" placeholder="Nome do professor">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold mb-1">E-mail</label>
+                    <input id="new-prof-email" type="email" class="w-full rounded border-slate-300 p-2" placeholder="email@escola.com">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold mb-1">Senha Inicial</label>
+                    <input id="new-prof-pass" type="text" class="w-full rounded border-slate-300 p-2" value="mudar123">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold mb-1">Instrumento</label>
+                    <input id="new-prof-inst" type="text" class="w-full rounded border-slate-300 p-2" placeholder="Ex: Violão">
+                </div>
+            </div>
+        `;
+
+        app.modal({
+            title: 'Novo Professor',
+            content: content,
+            confirmText: 'Criar Professor',
+            onConfirm: async () => {
+                const name = document.getElementById('new-prof-name').value;
+                const email = document.getElementById('new-prof-email').value;
+                const password = document.getElementById('new-prof-pass').value;
+                const instrument = document.getElementById('new-prof-inst').value;
+
+                if (!email || !password || !name) return alert('Campos obrigatórios: Nome, Email, Senha.');
+
+                try {
+                    const res = await fetch(`${app.API_URL}/school/professors`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                        body: JSON.stringify({ name, email, password, instrument })
+                    });
+                    if (!res.ok) {
+                        const err = await res.json();
+                        throw new Error(err.message || 'Erro ao criar');
+                    }
+                    app.showToast('Professor criado com sucesso!');
+                    app.loadSchoolDashboard();
+                } catch (e) {
+                    alert('Erro: ' + e.message);
+                }
+            }
+        });
+    },
+
+    toggleProfessorStatus: async (id, status) => {
+        if (!confirm(`Deseja realmente definir este professor como ${status}?`)) return;
+        try {
+            const res = await fetch(`${app.API_URL}/school/professors/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                body: JSON.stringify({ status })
+            });
+            if (res.ok) {
+                app.showToast('Status atualizado!');
+                app.loadSchoolDashboard();
+            } else {
+                alert('Erro ao atualizar status.');
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    },
+
     // --- AUTOSCROLL ---
     scrollState: {
         active: false,
@@ -2653,7 +2845,7 @@ const app = {
 
         let remaining = seconds;
         div.style.display = 'block';
-        div.innerHTML = `${label} <span id="loop-seconds">${remaining}</span>s...`;
+        div.innerHTML = `${label} < span id = "loop-seconds" > ${remaining}</span > s...`;
 
         const interval = setInterval(() => {
             remaining--;
@@ -2709,32 +2901,32 @@ const app = {
             const fGap = 18 * scale;
 
             // Iniciar SVG
-            let svgStr = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">`;
+            let svgStr = `< svg width = "${w}" height = "${h}" viewBox = "0 0 ${w} ${h}" xmlns = "http://www.w3.org/2000/svg" > `;
 
             // Nut
             const barVal = parseInt(document.getElementById('chord-bar')?.value || chordData.bar);
             const nutWidth = barVal > 0 ? 1 : 4;
-            svgStr += `<line x1="${m}" y1="${m}" x2="${w - m}" y2="${m}" stroke="#4b5563" stroke-width="${nutWidth}"/>`;
+            svgStr += `< line x1 = "${m}" y1 = "${m}" x2 = "${w - m}" y2 = "${m}" stroke = "#4b5563" stroke - width="${nutWidth}" /> `;
 
             // Strings
             for (let i = 0; i < 6; i++) {
                 const x = m + i * sGap;
-                svgStr += `<line x1="${x}" y1="${m}" x2="${x}" y2="${h - m}" stroke="#9ca3af" stroke-width="1"/>`;
+                svgStr += `< line x1 = "${x}" y1 = "${m}" x2 = "${x}" y2 = "${h - m}" stroke = "#9ca3af" stroke - width="1" /> `;
             }
 
             // Frets
             for (let i = 1; i <= 5; i++) {
                 const y = m + i * fGap;
-                svgStr += `<line x1="${m}" y1="${y}" x2="${w - m}" y2="${y}" stroke="#9ca3af" stroke-width="1"/>`;
+                svgStr += `< line x1 = "${m}" y1 = "${y}" x2 = "${w - m}" y2 = "${y}" stroke = "#9ca3af" stroke - width="1" /> `;
             }
 
             // Status Row (O/X)
             chordData.p.forEach((fret, sIndex) => {
                 const x = m + sIndex * sGap;
                 if (fret === -1) {
-                    svgStr += `<text x="${x}" y="${m - 7}" text-anchor="middle" fill="#ef4444" font-size="16" font-family="sans-serif">×</text>`;
+                    svgStr += `< text x = "${x}" y = "${m - 7}" text - anchor="middle" fill = "#ef4444" font - size="16" font - family="sans-serif" >×</text > `;
                 } else if (fret === 0) {
-                    svgStr += `<circle cx="${x}" cy="${m - 10}" r="4.5" stroke="#059669" stroke-width="2" fill="none"/>`;
+                    svgStr += `< circle cx = "${x}" cy = "${m - 10}" r = "4.5" stroke = "#059669" stroke - width="2" fill = "none" /> `;
                 }
             });
 
@@ -2743,9 +2935,9 @@ const app = {
             if (barVal > 0) {
                 const y = m + (1 * fGap) - (fGap / 2);
                 if (!noBarLine) {
-                    svgStr += `<rect x="${m - 3}" y="${y - 6}" width="${w - 2 * m + 6}" height="12" rx="3" fill="#059669"/>`;
+                    svgStr += `< rect x = "${m - 3}" y = "${y - 6}" width = "${w - 2 * m + 6}" height = "12" rx = "3" fill = "#059669" /> `;
                 }
-                svgStr += `<text x="0" y="${y + 6}" fill="#4b5563" font-size="14" font-family="sans-serif" font-weight="bold">${barVal}ª</text>`;
+                svgStr += `< text x = "0" y = "${y + 6}" fill = "#4b5563" font - size="14" font - family="sans-serif" font - weight="bold" > ${barVal}ª</text > `;
             }
 
             // Fingers
@@ -2755,11 +2947,11 @@ const app = {
                     const y = m + (fret * fGap) - (fGap / 2);
                     // Não desenha se houver pestana na casa 1 (simplificação visual do card), A MENOS que noBarLine esteja marcado
                     if (barVal > 0 && fret === 1 && !noBarLine) return;
-                    svgStr += `<circle cx="${x}" cy="${y}" r="7.5" fill="#059669"/>`;
+                    svgStr += `< circle cx = "${x}" cy = "${y}" r = "7.5" fill = "#059669" /> `;
                 }
             });
 
-            svgStr += `</svg>`;
+            svgStr += `</svg > `;
 
             const interactiveWrap = document.createElement('div');
             interactiveWrap.className = 'fretboard-interactive';
@@ -2796,26 +2988,26 @@ const app = {
         };
 
         const contentHtml = `
-            <div class="chord-editor-container">
-                <input type="text" id="new-chord-name" class="modal-input" placeholder="Nome do Acorde (ex: G7M)" style="margin-bottom:0" value="${chordData.name}">
-                <div id="chord-creator-fretboard"></div>
-                <div class="editor-controls">
-                    <div style="display:flex; flex-direction:column; gap:10px;">
-                        <div style="display:flex; align-items:center; gap:10px;">
-                            <label style="margin:0">Casa da Pestana (0=sem):</label>
-                            <input type="number" id="chord-bar" value="${chordData.bar}" min="0" max="15" style="width:60px; padding:5px; border-radius:4px; border:1px solid var(--border-color)">
-                        </div>
-                        <div style="display:flex; align-items:center; gap:10px; background: rgba(0,0,0,0.02); padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border-color);">
-                            <input type="checkbox" id="chord-no-bar" style="width: auto; margin: 0;" ${chordData.noBarLine ? 'checked' : ''}>
+        < div class= "chord-editor-container" >
+        <input type="text" id="new-chord-name" class="modal-input" placeholder="Nome do Acorde (ex: G7M)" style="margin-bottom:0" value="${chordData.name}">
+            <div id="chord-creator-fretboard"></div>
+            <div class="editor-controls">
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <label style="margin:0">Casa da Pestana (0=sem):</label>
+                        <input type="number" id="chord-bar" value="${chordData.bar}" min="0" max="15" style="width:60px; padding:5px; border-radius:4px; border:1px solid var(--border-color)">
+                    </div>
+                    <div style="display:flex; align-items:center; gap:10px; background: rgba(0,0,0,0.02); padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border-color);">
+                        <input type="checkbox" id="chord-no-bar" style="width: auto; margin: 0;" ${chordData.noBarLine ? 'checked' : ''}>
                             <label for="chord-no-bar" style="margin: 0; cursor: pointer; color: var(--text-color); font-size: 0.9rem;">
                                 Apenas número da casa (sem linha da pestana)
                             </label>
-                        </div>
                     </div>
-                    <p style="font-size:0.8rem; color:var(--text-muted); margin-top: 10px;">Clique nas casas para colocar os dedos. Na primeira linha, alterne entre Aberta (O) e Abafada (X).</p>
                 </div>
+                <p style="font-size:0.8rem; color:var(--text-muted); margin-top: 10px;">Clique nas casas para colocar os dedos. Na primeira linha, alterne entre Aberta (O) e Abafada (X).</p>
             </div>
-        `;
+        </div>
+`;
 
         const modalPromise = app.modal({
             title: 'Criar Novo Acorde',

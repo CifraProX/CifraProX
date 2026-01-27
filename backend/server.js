@@ -55,6 +55,44 @@ app.get('/init-admin', async (req, res) => {
     }
 });
 
+// --- ROTA TEMPORÁRIA PARA CRIAR ESCOLA ---
+app.get('/init-school', async (req, res) => {
+    try {
+        const email = 'escola@teste.com';
+        const password = '123456';
+
+        // Check exist
+        const check = await db.query('SELECT * FROM users WHERE email = $1', [email]);
+
+        if (check.rows.length > 0) {
+            await db.query(`
+                UPDATE users 
+                SET role = 'school', status = 'active', password_hash = $1, plan_id = 4 
+                WHERE email = $2`,
+                [password, email]
+            );
+            return res.send(`<h1>✅ Usuário ESCOLA ATUALIZADO!</h1>
+                <p><b>Email:</b> ${email}</p>
+                <p><b>Senha:</b> ${password}</p>
+                <p><b>Role:</b> school</p>
+                <p>Agora você pode fazer login e acessar o dashboard de escola.</p>`);
+        } else {
+            await db.query(
+                `INSERT INTO users (name, email, password_hash, role, status, plan_id, instrument)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                ['Escola Teste', email, password, 'school', 'active', 4, 'Violão']
+            );
+            return res.send(`<h1>✅ Usuário ESCOLA CRIADO!</h1>
+                <p><b>Email:</b> ${email}</p>
+                <p><b>Senha:</b> ${password}</p>
+                <p><b>Role:</b> school</p>
+                <p>Agora você pode fazer login e acessar o dashboard de escola.</p>`);
+        }
+    } catch (err) {
+        return res.status(500).send('Erro ao criar escola: ' + err.message);
+    }
+});
+
 // --- MIDDLEWARES ---
 function authenticateToken(req, res, next) {
     const token = req.headers['authorization'];
@@ -112,7 +150,7 @@ app.post('/auth/register', async (req, res) => {
             role = 'professor';
             plan_id = 7; // Professor Elite (25 acessos)
         } else if (type === 'school_basic') {
-            role = 'admin'; // Escola ganha admin
+            role = 'school'; // Alterado de 'admin' para 'school'
             plan_id = 4; // Escola Básico (5 professores x 20 acessos)
         } else if (type === 'student') {
             plan_id = 1; // Aluno (Agora R$ 19,90) - mantendo ID 1
@@ -241,6 +279,66 @@ app.post('/auth/login', async (req, res) => {
         res.status(500).json({ message: 'Erro interno no servidor' });
     }
 });
+
+// --- API ESCOLA (Gestão de Professores) ---
+app.get('/school/professors', authenticateToken, authorizeRole(['school']), async (req, res) => {
+    try {
+        // Assume 'school_id' linkage. For now, we link by who created them? 
+        // Or we add 'school_id' to users table.
+        // Let's assume we added 'school_id' column.
+        const result = await db.query(`
+            SELECT id, name, email, phone, instrument, status, last_payment
+            FROM users 
+            WHERE school_id = $1 AND role = 'professor'
+        `, [req.user.id]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Erro ao listar professores' });
+    }
+});
+
+app.post('/school/professors', authenticateToken, authorizeRole(['school']), async (req, res) => {
+    const { name, email, password, instrument } = req.body;
+    try {
+        // Enforce limits? (Check plan max_users?)
+        // For MVP: Create user linked to school
+        const role = 'professor';
+        const plan_id = 5; // Default to Professor Start? Or inherit? Let's use 5.
+        const status = 'active';
+        const school_id = req.user.id; // Link to the logged-in School User
+
+        // Check exist
+        const check = await db.query('SELECT id FROM users WHERE email = $1', [email]);
+        if (check.rows.length > 0) return res.status(409).json({ message: 'Email já cadastrado.' });
+
+        await db.query(`
+            INSERT INTO users (name, email, password_hash, role, plan_id, status, instrument, school_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        `, [name, email, password, role, plan_id, status, instrument, school_id]);
+
+        res.status(201).json({ message: 'Professor criado com sucesso!' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Erro ao criar professor' });
+    }
+});
+
+app.put('/school/professors/:id', authenticateToken, authorizeRole(['school']), async (req, res) => {
+    const { status } = req.body; // 'active' or 'inactive'
+    const { id } = req.params;
+    try {
+        // Verify ownership
+        const check = await db.query('SELECT id FROM users WHERE id = $1 AND school_id = $2', [id, req.user.id]);
+        if (check.rows.length === 0) return res.status(403).json({ message: 'Professor não encontrado.' });
+
+        await db.query('UPDATE users SET status = $1 WHERE id = $2', [status, id]);
+        res.json({ message: 'Status atualizado.' });
+    } catch (err) {
+        res.status(500).json({ message: 'Erro ao atualizar.' });
+    }
+});
+
 
 // --- API ADMIN (Gestão de Usuários) ---
 app.get('/admin/users', authenticateToken, authorizeRole(['admin']), async (req, res) => {
@@ -415,6 +513,22 @@ app.post('/cifras', authenticateToken, authorizeRole(['admin', 'professor', 'stu
     }
 });
 
-app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+// --- STARTUP CHECKS ---
+const initDB = async () => {
+    try {
+        // Migration: Add school_id to users if not exists
+        await db.query(`
+            ALTER TABLE users 
+            ADD COLUMN IF NOT EXISTS school_id INTEGER
+        `);
+        console.log('Database Schema Verified (school_id)');
+    } catch (e) {
+        console.warn('Schema check warning:', e.message);
+    }
+};
+
+initDB().then(() => {
+    app.listen(PORT, () => {
+        console.log(`Server running on http://localhost:${PORT}`);
+    });
 });
