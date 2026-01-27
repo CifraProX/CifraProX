@@ -1,571 +1,1015 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-br" class="light">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CifraProX</title>
-    <meta name="referrer" content="strict-origin-when-cross-origin">
-    <script src="https://www.youtube.com/iframe_api"></script>
-    <link rel="stylesheet" href="style.css?v=35">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#1a2e25">
-    <link rel="icon" type="image/png" href="logo.png">
-    <link rel="apple-touch-icon" href="logo.png">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
-    <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <!-- Meta tags PWA -->
+    <meta name="theme-color" content="#10b981">
+    <link rel="manifest" href="manifest.json">
+
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com" rel="preconnect" />
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600;700&amp;family=Montserrat:wght@700&amp;display=swap"
+        rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Icons+Round" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0"
+        rel="stylesheet" />
+
+    <!-- Tailwind Config -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#10b981",
+                        "primary-dark": "#059669",
+                        "background-light": "#f8f9f8",
+                        "background-dark": "#0f172a",
+                        "nav-dark": "#13231d",
+                    },
+                    fontFamily: {
+                        display: ["Outfit", "Montserrat", "sans-serif"],
+                        sans: ["Inter", "sans-serif"],
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.75rem",
+                    },
+                },
+            },
+        };
+    </script>
+    <style>
+        .bg-texture {
+            background-image: url(https://lh3.googleusercontent.com/aida-public/AB6AXuC8MjUsHRH0CLGsoN6Ldg9T3GHJlKp4423gpnESyspbcGUxjV5y4s_aKg342EP790-dTX82lAUvJzqQARkl4j0b_-rLpNP7K-PCAHKLhS8Em9mpBnrJ3mF4tTIKux6npLViM1jrD-s1I-4bx1KFr9QYS09-ihDmLSgwgJJ8HOQFBVtJ83iWm0fy7xKnSkqwoDi1CVX5Wt1hciaqDZfqelJMJR86JfSp6BChhG8QBGEBiBKvHnh2gGg4ORMOM1-62_LWPHPL2Z71P1o);
+            opacity: 0.03;
+            pointer-events: none;
+        }
+
+        .dark .bg-texture {
+            opacity: 0.05;
+            filter: invert(1);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+
+        .dark ::-webkit-scrollbar-thumb {
+            background: #334155;
+        }
+
+        /* App Container */
+        #app {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* --- MODAL SYSTEM CSS --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .modal-active .modal-overlay {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-container {
+            background: white;
+            width: 95%;
+            max-width: 800px;
+            border-radius: 1rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            padding: 2rem;
+            transform: scale(0.95);
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .dark .modal-container {
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: white;
+        }
+
+        .modal-active .modal-container {
+            transform: scale(1);
+        }
+
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: #0f172a;
+        }
+
+        .dark .modal-title {
+            color: white;
+        }
+
+        .modal-content {
+            margin-bottom: 1.5rem;
+            color: #475569;
+            font-size: 0.95rem;
+        }
+
+        .dark .modal-content {
+            color: #cbd5e1;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+        }
+
+        .modal-input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 0.5rem;
+            margin-bottom: 1.5rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .dark .modal-input {
+            background: #0f172a;
+            border-color: #334155;
+            color: white;
+        }
+
+        .modal-input:focus {
+            border-color: #10b981;
+            box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.1);
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #10b981;
+            color: white;
+            border: none;
+        }
+
+        .btn-primary:hover {
+            background: #059669;
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid #cbd5e1;
+            color: #64748b;
+        }
+
+        .dark .btn-outline {
+            border-color: #475569;
+            color: #94a3b8;
+        }
+
+        .btn-outline:hover {
+            background: #f1f5f9;
+        }
+
+        .dark .btn-outline:hover {
+            background: #334155;
+        }
+    </style>
 </head>
 
-<body>
-    <div id="offline-status">Você está offline. Exibindo dados salvos localmente.</div>
-    <header>
-        <nav>
-            <a href="javascript:void(0)" class="logo" onclick="app.navigate('home')">CifraPro<span
-                    class="metallic-x">X</span></a>
-            <div class="nav-container">
-                <button id="theme-toggle" class="btn-theme" onclick="app.toggleTheme()" title="Alternar Tema">
-                    <svg id="theme-icon-sun" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                        style="display:none;">
-                        <circle cx="12" cy="12" r="4"></circle>
-                        <path d="M12 3v1"></path>
-                        <path d="M12 20v1"></path>
-                        <path d="m5.1 5.1 1 1"></path>
-                        <path d="m16.9 16.9 1 1"></path>
-                        <path d="M3 12h1"></path>
-                        <path d="M20 12h1"></path>
-                        <path d="m6.1 17.9-1 1"></path>
-                        <path d="m18.9 6.1-1 1"></path>
-                    </svg>
-                    <svg id="theme-icon-moon" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M12 3a6.36 6.36 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
-                    </svg>
-                </button>
-                <div class="nav-links" id="nav-links">
-                    <span style="color:white">Carregando menu...</span>
-                </div>
-            </div>
-        </nav>
-    </header>
+<body
+    class="bg-background-light dark:bg-background-dark text-slate-800 dark:text-slate-200 font-sans transition-colors duration-300">
+
+    <div id="app"></div>
+    <div id="modal-root"></div>
 
 
-    <main id="app">
-        <h3 style="text-align:center; padding: 2rem; color: #666;">Carregando sistema...</h3>
-        <script>
-            setTimeout(() => {
-                if (document.querySelector('h3')) {
-                    document.querySelector('h3').innerText = "O Javascript não carregou ou travou.";
-                    document.querySelector('h3').style.color = "red";
-                }
-            }, 5000);
-        </script>
-    </main>
-
-    <!-- Templates -->
-    <template id="view-home">
-        <div class="actions" style="margin-bottom: 2rem;">
-            <div class="home-controls">
-                <div class="filters-container">
-                    <div class="search-box">
-                        <input type="text" id="filter-search" placeholder="Pesquisar..." oninput="app.filterCifras()">
-                    </div>
-                    <div class="filter-selectors">
-                        <select id="filter-genre" class="filter-select" onchange="app.filterCifras()">
-                            <option value="">Gênero</option>
-                            <option value="Sertanejo">Sertanejo</option>
-                            <option value="Rock">Rock</option>
-                            <option value="MPB">MPB</option>
-                            <option value="Acústico">Acústico</option>
-                        </select>
-                        <select id="filter-capo" class="filter-select" onchange="app.filterCifras()">
-                            <option value="">Capo</option>
-                            <option value="Sem Capo">Sem Capo</option>
-                            <option value="1ª Casa">1ª Casa</option>
-                            <option value="2ª Casa">2ª Casa</option>
-                            <option value="3ª Casa">3ª Casa</option>
-                            <option value="4ª Casa">4ª Casa</option>
-                            <option value="5ª Casa">5ª Casa</option>
-                            <option value="6ª Casa">6ª Casa</option>
-                            <option value="7ª Casa">7ª Casa</option>
-                            <option value="8ª Casa">8ª Casa</option>
-                            <option value="9ª Casa">9ª Casa</option>
-                        </select>
-                    </div>
-                </div>
-                <button class="btn btn-create" onclick="app.navigate('editor')" id="btn-create" style="display:none;">+
-                    Nova</button>
-            </div>
-        </div>
-        <div class="cifra-grid" id="cifra-list">
-            <!-- Cifras here -->
-        </div>
-    </template>
-
+    <!-- TEMPLATE: LOGIN -->
     <template id="view-login">
-        <div class="form-container">
-            <h2 style="margin-bottom: 1.5rem; text-align: center;">Entrar</h2>
-            <form onsubmit="app.login(event)">
-                <div class="input-group">
-                    <label>E-mail</label>
-                    <input type="email" name="email" required placeholder="Seu e-mail">
-                </div>
-                <div class="input-group">
-                    <label>Senha</label>
-                    <input type="password" name="password" required placeholder="Sua senha">
-                </div>
-                <button type="submit" class="btn btn-primary" style="width: 100%;">Entrar</button>
-            </form>
-        </div>
-    </template>
-
-    <template id="view-library">
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 2rem;">
-            <div>
-                <h1>Biblioteca de Acordes</h1>
-                <p style="color: var(--text-muted);">Consulte todos os acordes disponíveis no sistema.</p>
-            </div>
-            <button class="btn btn-create" id="btn-open-creator" onclick="app.openChordCreator()">+ Cadastrar
-                Acorde</button>
-        </div>
-        <div id="library-list" style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
-            <!-- Renderizado via JS -->
-        </div>
-    </template>
-
-    <template id="view-setlists">
-        <h1>Meus Repertórios</h1>
-        <p style="color: var(--text-muted); margin-bottom: 2rem;">Organize suas músicas para shows e ensaios.</p>
-
-        <div id="reorder-section"
-            style="display:none; margin-bottom: 2rem; background: rgba(0,0,0,0.02); padding: 1.5rem; border-radius: 16px; border: 1px dashed var(--border-color);">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
-                <h3 id="reorder-title" style="margin:0; font-size:1.1rem;">Reordenar Músicas</h3>
-                <button class="btn btn-outline" style="padding:0.3rem 0.8rem; font-size:0.8rem;"
-                    onclick="document.getElementById('reorder-section').style.display='none'">Fechar</button>
-            </div>
-            <div id="reorder-list">
-                <!-- Injetado via JS -->
-            </div>
-        </div>
-
-        <div class="cifra-grid" id="setlist-grid">
-            <!-- Renderizado via JS -->
-        </div>
-    </template>
-
-    <template id="view-cifra">
-        <div id="cifra-display">
-            <div class="cifra-header">
-                <div class="cifra-header-info">
-                    <h1 id="view-title" style="margin-bottom: 0.2rem; margin-top: 0;">Título</h1>
-                    <p id="view-artist"
-                        style="margin-bottom: 0.5rem; color: var(--primary-color); font-weight: 500; font-size: 1.2rem; margin-top: 0;">
-                        Artista</p>
-                </div>
-                <div style="display: flex; align-items: center; gap: 1rem; margin-left: auto;">
-                    <div id="cifra-mode-toggle" class="mode-toggle-container" style="display:none;">
-                        <button class="btn-mode active" onclick="app.setContentView('lyrics')"
-                            id="btn-mode-lyrics">Letra</button>
-                        <button class="btn-mode" onclick="app.setContentView('tabs')"
-                            id="btn-mode-tabs">Tablatura</button>
-                        <!-- Metronome Integrated -->
-                        <div id="metronome-display" class="btn-mode" onclick="app.toggleMetronome()"
-                            style="display:none; align-items: center; justify-content: center; gap: 6px; cursor: pointer; padding: 4px 12px; height: auto;">
-                            <div id="metronome-dot"
-                                style="width: 10px; height: 10px; border-radius: 50%; background: var(--text-muted); transition: background 0.1s;">
-                            </div>
-                            <span id="metronome-bpm-label"
-                                style="font-size: 0.85rem; font-weight: 600; font-variant-numeric: tabular-nums;">BPM:
-                                --</span>
-                        </div>
+        <div class="min-h-screen flex flex-col md:flex-row w-full">
+            <!-- Left Side / Image -->
+            <div class="hidden md:flex md:w-1/2 lg:w-3/5 relative bg-emerald-950 overflow-hidden">
+                <img alt="Guitar close up"
+                    class="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-overlay"
+                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuCkOvpG3JuERqswogLJi5czWy1wOqEWM7uumyibOAh4clgr_MOaehEB75sq9aEPYdyPmnDHzjqifOvNLmXEdzjS9037nNmEjNsF5q1a_Y3Rn6o7SgJWcnzCPtFFzDQUFFPVqOk0e2ngn7NHNZzOQJMdpov26fZaJqRKWMHm0fV0nTbIP_n-Ks3QQcOCNOGfO-dp4fZB-sGHJNWey76fFuCFwuu7GifqzpHjLSdMD8twU8RyYcZkTFVMCt5fVPBP6gSzbFLMpzu_4nY" />
+                <div class="relative z-10 flex flex-col justify-between p-12 w-full h-full">
+                    <div class="flex items-center gap-2">
+                        <span class="material-symbols-rounded text-primary text-4xl">music_note</span>
+                        <h1 class="font-display text-3xl font-bold tracking-tight text-white">CifraProX</h1>
+                    </div>
+                    <div>
+                        <h2 class="text-4xl lg:text-5xl font-bold text-white mb-6 leading-tight">
+                            Organize seu repertório <br />
+                            <span class="text-primary text-5xl lg:text-6xl">como um profissional.</span>
+                        </h2>
+                        <p class="text-emerald-100/80 text-lg max-w-md">
+                            A plataforma definitiva para músicos gerenciarem cifras e setlists em um só lugar.
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <div class="text-sm text-emerald-200/60">Junte-se a mais de 10.000 músicos</div>
                     </div>
                 </div>
             </div>
 
-
-
-            <div id="view-meta"
-                style="font-size: 0.9rem; color: var(--text-muted); display: flex; align-items: center; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap;">
-                <span id="view-genre"
-                    style="display:none; background: #e0f2f1; color: #004d40; padding: 2px 8px; border-radius: 4px; font-weight: 500;"></span>
-                <span id="view-tom"
-                    style="display:none; background: #e3f2fd; color: #0d47a1; padding: 2px 8px; border-radius: 4px; font-weight: 500;"></span>
-                <span id="view-capo"
-                    style="display:none; background: #f3e5f5; color: #4a148c; padding: 2px 8px; border-radius: 4px; font-weight: 500;"></span>
-
-                <div class="cifra-top-actions no-print" style="display:flex; gap: 0.5rem; align-items: center;">
-                    <button id="btn-youtube-view" class="btn btn-music btn-small"
-                        style="display:none; align-items:center; gap: 4px;" onclick="app.toggleMusicPlayer()">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                        </svg>
-                        Ouvir Música
-                    </button>
-
-                    <button id="btn-youtube-training" class="btn btn-outline btn-small"
-                        style="display:none; align-items:center; gap: 4px; border-color: #10b981; color: #10b981;"
-                        onclick="app.toggleMusicPlayer(null, 'training')">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M22 10v6M2 10l10-5 10 5-10 5z"></path>
-                            <path d="M6 12v5c3 3 9 3 12 0v-5"></path>
-                        </svg>
-                        Vídeo de Treino
-                    </button>
-
-                    <!-- Compact Audio Player -->
-                    <div id="music-player-modal" class="music-player-modal" style="display:none;">
-                        <div class="music-player-content">
-                            <div class="music-player-body">
-                                <div class="audio-info">
-                                    <div class="music-icon-animated">
-                                        <span></span><span></span><span></span><span></span>
-                                    </div>
-                                    <div class="audio-text">
-                                        <span id="player-song-title">Ouvindo...</span>
-                                        <span id="player-status">Tocando agora</span>
-                                    </div>
-                                </div>
-                                <div class="player-controls">
-                                    <button class="btn-close-player" onclick="app.toggleMusicPlayer(false)">✕</button>
-                                </div>
-                            </div>
-                            <!-- Mini Video/Audio Player Area -->
-                            <div id="player-iframe-wrapper" class="player-iframe-wrapper">
-                                <div id="music-player-container"></div>
-                            </div>
-                        </div>
-                    </div>
-                    <button class="btn btn-outline btn-small" onclick="window.print()"
-                        style="display:flex; align-items:center; gap: 4px;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="6 9 6 2 18 2 18 9" />
-                            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                            <rect x="6" y="14" width="12" height="8" />
-                        </svg>
-                        Imprimir
+            <!-- Right Side / Form -->
+            <div
+                class="flex-1 flex flex-col justify-center px-6 py-12 lg:px-20 bg-background-light dark:bg-background-dark relative">
+                <!-- Theme Toggle -->
+                <div class="absolute top-8 right-12">
+                    <button onclick="app.toggleTheme()"
+                        class="p-2 rounded-full hover:bg-emerald-50 dark:hover:bg-emerald-900/20 text-slate-500 dark:text-emerald-400 transition-colors">
+                        <span class="material-symbols-rounded theme-icon">dark_mode</span>
                     </button>
                 </div>
+
+                <div class="max-w-md w-full mx-auto">
+                    <div class="mb-10 text-center md:text-left">
+                        <h2 class="text-3xl font-bold text-slate-900 dark:text-white mb-2">Entrar</h2>
+                        <p class="text-slate-500 dark:text-slate-400">Bem-vindo de volta! Por favor, insira seus dados.
+                        </p>
+                    </div>
+
+                    <form onsubmit="app.login(event)" class="space-y-5">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5"
+                                for="email">E-mail</label>
+                            <div class="relative">
+                                <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400">
+                                    <span class="material-symbols-rounded text-[20px]">mail</span>
+                                </span>
+                                <input id="email" name="email" type="email" required
+                                    class="block w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-slate-900 dark:text-white"
+                                    placeholder="nome@exemplo.com" />
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex items-center justify-between mb-1.5">
+                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300"
+                                    for="password">Senha</label>
+                            </div>
+                            <div class="relative">
+                                <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400">
+                                    <span class="material-symbols-rounded text-[20px]">lock</span>
+                                </span>
+                                <input id="password" name="password" type="password" required
+                                    class="block w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-slate-900 dark:text-white"
+                                    placeholder="••••••••" />
+                            </div>
+                        </div>
+
+                        <button type="submit"
+                            class="w-full bg-primary hover:bg-emerald-600 text-white font-semibold py-3.5 rounded-xl shadow-lg shadow-emerald-500/20 active:scale-[0.98] transition-all duration-200">
+                            Entrar na conta
+                        </button>
+                    </form>
+
+                    <div class="mt-8 text-center text-sm text-slate-500">
+                        Não tem uma conta? <a href="javascript:void(0)" onclick="app.navigate('register')"
+                            class="text-primary font-bold hover:underline">Cadastre-se</a>
+                    </div>
+                </div>
             </div>
+        </div>
+    </template>
 
-            <!-- Chords Gallery -->
-            <div id="view-chords-container" style="display:none; margin-bottom: 2rem;">
-                <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">Acordes:</p>
-                <div id="view-chords-list" style="display: flex; gap: 1rem; flex-wrap: wrap;"></div>
-            </div>
-
-            <!-- Batida Display -->
-            <div id="view-strumming-container"
-                style="display:none; margin-bottom: 2rem; background: var(--card-bg); padding: 1rem; border-radius: 8px; border: 1px dashed var(--border-color);">
-                <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">Batida Sugerida:</p>
-                <div id="view-strumming" style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;"></div>
-            </div>
-
-            <div class="cifra-content" id="view-content" style="font-family: monospace; font-size: 18px;"></div>
-            <div class="cifra-content hidden" id="view-tabs"
-                style="font-family: monospace; font-size: 18px; white-space: pre; overflow-x: auto;"></div>
-
-            <!-- Autoscroll Controls -->
-            <div id="loop-countdown" style="display:none;">
-                Voltando em <span id="loop-seconds">0</span>s...
-            </div>
-
-            <div id="scroll-controls"
-                style="position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; align-items: flex-end; z-index: 100;">
-
-                <button class="btn btn-primary" id="btn-scroll-toggle" onclick="app.toggleScroll()"
-                    style="width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; padding: 0;">
-                    <svg id="icon-play" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                    </svg>
-                    <svg id="icon-pause" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
-                        <rect x="6" y="4" width="4" height="16"></rect>
-                        <rect x="14" y="4" width="4" height="16"></rect>
-                    </svg>
-                </button>
-            </div>
-
-            <!-- Setlist Navigation Bar (Hidden by default) -->
-            <div id="setlist-navigator"
-                style="display:none; position: fixed; bottom: 0; left: 0; width: 100%; background: var(--bg-header); padding: 1rem; color: white; border-top: 1px solid rgba(255,255,255,0.1); z-index: 90; backdrop-filter: blur(10px);">
+    <!-- TEMPLATE: REGISTER -->
+    <template id="view-register">
+        <div class="min-h-screen flex items-center justify-center w-full bg-slate-50 dark:bg-slate-900 p-4 relative">
+            <!-- Background Texture/Effect -->
+            <div class="absolute inset-0 overflow-hidden pointer-events-none">
                 <div
-                    style="max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; padding: 0 1rem;">
-                    <button class="btn btn-outline"
-                        style="background: transparent; color: white; border-color: rgba(255,255,255,0.2);"
-                        onclick="app.prevInSetlist()">← Anterior</button>
-                    <div id="setlist-info" style="text-align: center; font-size: 0.9rem;">
-                        <div id="setlist-name" style="font-weight: bold; color: var(--primary-color);">Repertório</div>
-                        <div id="setlist-pos" style="opacity: 0.7;">1 de 10</div>
+                    class="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] bg-emerald-500/10 rounded-full blur-[100px]">
+                </div>
+                <div class="absolute top-[20%] -right-[10%] w-[40%] h-[40%] bg-blue-500/10 rounded-full blur-[100px]">
+                </div>
+            </div>
+
+            <div
+                class="relative z-10 max-w-3xl w-full bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                <div class="flex flex-col md:flex-row">
+                    <!-- Form Section -->
+                    <div class="flex-1 p-8 md:p-10">
+                        <div class="mb-8 text-center md:text-left flex flex-col md:items-start items-center">
+                            <button onclick="app.navigate('login')"
+                                class="mb-6 text-sm text-slate-500 hover:text-primary flex items-center gap-1 transition-colors group">
+                                <span
+                                    class="material-icons-round text-base group-hover:-translate-x-1 transition-transform">arrow_back</span>
+                                Voltar para Login
+                            </button>
+                            <h2 class="text-3xl font-display font-bold text-slate-900 dark:text-white mb-2">Criar Conta
+                            </h2>
+                            <p class="text-slate-500 dark:text-slate-400">Preencha seus dados para começar.</p>
+                        </div>
+
+                        <form onsubmit="app.register(event)" class="space-y-5">
+                            <!-- Personal Info Grid -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="col-span-1 md:col-span-2">
+                                    <label
+                                        class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5"
+                                        for="reg-name">Nome Completo</label>
+                                    <input id="reg-name" name="name" type="text" required
+                                        class="block w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-slate-900 dark:text-white"
+                                        placeholder="Seu nome" />
+                                </div>
+
+                                <div>
+                                    <label
+                                        class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5"
+                                        for="reg-cpf">CPF</label>
+                                    <input id="reg-cpf" name="cpf" type="text"
+                                        class="block w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-slate-900 dark:text-white"
+                                        placeholder="000.000.000-00" />
+                                </div>
+
+                                <div>
+                                    <label
+                                        class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5"
+                                        for="reg-phone">Celular / WhatsApp</label>
+                                    <input id="reg-phone" name="phone" type="tel"
+                                        class="block w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-slate-900 dark:text-white"
+                                        placeholder="(00) 00000-0000" />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5"
+                                    for="reg-email">E-mail</label>
+                                <input id="reg-email" name="email" type="email" required
+                                    class="block w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-slate-900 dark:text-white"
+                                    placeholder="nome@exemplo.com" />
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label
+                                        class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5"
+                                        for="reg-password">Senha</label>
+                                    <input id="reg-password" name="password" type="password" required
+                                        class="block w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-slate-900 dark:text-white"
+                                        placeholder="••••••••" />
+                                </div>
+                                <div class="relative">
+                                    <label
+                                        class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5"
+                                        for="reg-instrument">Instrumento Principal</label>
+                                    <select id="reg-instrument" name="instrument"
+                                        class="block w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-slate-900 dark:text-white appearance-none">
+                                        <option value="Violão">Violão</option>
+                                        <option value="Guitarra">Guitarra</option>
+                                        <option value="Baixo">Baixo</option>
+                                        <option value="Teclado">Teclado</option>
+                                        <option value="Bateria">Bateria</option>
+                                        <option value="Vocal">Vocal</option>
+                                        <option value="Outro">Outro</option>
+                                    </select>
+                                    <span
+                                        class="absolute right-4 top-[38px] pointer-events-none text-slate-500 material-icons-round text-sm">expand_more</span>
+                                </div>
+                            </div>
+
+                            <!-- Plan Selection (New Pricing Hierarchy) -->
+                            <div class="pt-6 border-t border-slate-100 dark:border-slate-700">
+                                <label
+                                    class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Selecione
+                                    o Plano Ideal</label>
+
+                                <div class="flex flex-col gap-3">
+                                    <!-- ALUNO -->
+                                    <label class="cursor-pointer group relative">
+                                        <input type="radio" name="type" value="student" class="peer sr-only" checked>
+                                        <div
+                                            class="p-4 rounded-2xl border-2 border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-emerald-200 dark:hover:border-emerald-800 peer-checked:border-emerald-500 peer-checked:ring-1 peer-checked:ring-emerald-500 peer-checked:bg-emerald-50/30 dark:peer-checked:bg-emerald-900/10 transition-all duration-200 flex items-center justify-between peer-checked:[&_.ring-circle]:bg-emerald-500 peer-checked:[&_.ring-circle]:border-emerald-500 peer-checked:[&_.check-icon]:opacity-100">
+                                            <div class="flex items-center gap-4">
+                                                <div
+                                                    class="h-12 w-12 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                                                    <span class="material-icons-round text-2xl">person</span>
+                                                </div>
+                                                <div>
+                                                    <div
+                                                        class="font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                                        Aluno
+                                                        <span
+                                                            class="bg-emerald-100 text-emerald-700 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">R$
+                                                            19,90/mês</span>
+                                                    </div>
+                                                    <div
+                                                        class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-3">
+                                                        <span>• Repertório Pessoal</span>
+                                                        <span>• Acesso a Cifras</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div
+                                                class="ring-circle w-6 h-6 rounded-full border-2 border-slate-300 dark:border-slate-600 flex items-center justify-center transition-colors">
+                                                <span
+                                                    class="check-icon material-icons-round text-white text-sm opacity-0 transition-opacity">check</span>
+                                            </div>
+                                        </div>
+                                    </label>
+
+                                    <!-- Professor START -->
+                                    <label class="cursor-pointer group relative">
+                                        <input type="radio" name="type" value="professor_start" class="peer sr-only">
+                                        <div
+                                            class="p-4 rounded-2xl border-2 border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-blue-200 dark:hover:border-blue-800 peer-checked:border-blue-500 peer-checked:ring-1 peer-checked:ring-blue-500 peer-checked:bg-blue-50/30 dark:peer-checked:bg-blue-900/10 transition-all duration-200 flex items-center justify-between peer-checked:[&_.ring-circle]:bg-blue-500 peer-checked:[&_.ring-circle]:border-blue-500 peer-checked:[&_.check-icon]:opacity-100">
+                                            <div class="flex items-center gap-4">
+                                                <div
+                                                    class="h-12 w-12 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                                                    <span class="material-icons-round text-2xl">school</span>
+                                                </div>
+                                                <div>
+                                                    <div
+                                                        class="font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                                        Professor Start
+                                                        <span
+                                                            class="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">R$
+                                                            59,90/mês</span>
+                                                    </div>
+                                                    <div
+                                                        class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-3">
+                                                        <span>• Até 8 acessos</span>
+                                                        <span>• Aula pequena / individual</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div
+                                                class="ring-circle w-6 h-6 rounded-full border-2 border-slate-300 dark:border-slate-600 flex items-center justify-center transition-colors">
+                                                <span
+                                                    class="check-icon material-icons-round text-white text-sm opacity-0 transition-opacity">check</span>
+                                            </div>
+                                        </div>
+                                    </label>
+
+                                    <!-- Professor PRO (MAIS VENDIDO) -->
+                                    <label class="cursor-pointer group relative">
+                                        <input type="radio" name="type" value="professor_pro" class="peer sr-only">
+                                        <div
+                                            class="p-4 rounded-2xl border-2 border-indigo-500 dark:border-indigo-400 bg-white dark:bg-slate-800 ring-4 ring-indigo-500/10 hover:border-indigo-600 peer-checked:bg-indigo-50/30 dark:peer-checked:bg-indigo-900/10 transition-all duration-200 flex items-center justify-between relative overflow-hidden peer-checked:[&_.ring-circle]:bg-indigo-500 peer-checked:[&_.ring-circle]:border-indigo-500 peer-checked:[&_.check-icon]:opacity-100">
+                                            <!-- Badge Mais Vendido -->
+                                            <div
+                                                class="absolute -right-12 top-6 bg-indigo-500 text-white text-[9px] font-bold px-12 py-1 rotate-45 shadow-sm">
+                                                MAIS VENDIDO ⭐</div>
+
+                                            <div class="flex items-center gap-4">
+                                                <div
+                                                    class="h-12 w-12 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                                                    <span class="material-icons-round text-2xl">verified</span>
+                                                </div>
+                                                <div>
+                                                    <div
+                                                        class="font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                                        Professor Pro
+                                                        <span
+                                                            class="bg-indigo-100 text-indigo-700 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">R$
+                                                            89,90/mês</span>
+                                                    </div>
+                                                    <div
+                                                        class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex flex-col gap-0.5">
+                                                        <span
+                                                            class="font-semibold text-indigo-600 dark:text-indigo-400">•
+                                                            Até 15 acessos</span>
+                                                        <span>• Melhor custo-benefício</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div
+                                                class="ring-circle w-6 h-6 rounded-full border-2 border-indigo-200 dark:border-indigo-800 flex items-center justify-center transition-colors">
+                                                <span
+                                                    class="check-icon material-icons-round text-white text-sm opacity-0 transition-opacity">check</span>
+                                            </div>
+                                        </div>
+                                    </label>
+
+                                    <!-- Professor ELITE -->
+                                    <label class="cursor-pointer group relative">
+                                        <input type="radio" name="type" value="professor_elite" class="peer sr-only">
+                                        <div
+                                            class="p-4 rounded-2xl border-2 border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-amber-200 dark:hover:border-amber-800 peer-checked:border-amber-500 peer-checked:ring-1 peer-checked:ring-amber-500 peer-checked:bg-amber-50/30 dark:peer-checked:bg-amber-900/10 transition-all duration-200 flex items-center justify-between peer-checked:[&_.ring-circle]:bg-amber-500 peer-checked:[&_.ring-circle]:border-amber-500 peer-checked:[&_.check-icon]:opacity-100">
+                                            <div class="flex items-center gap-4">
+                                                <div
+                                                    class="h-12 w-12 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                                                    <span class="material-icons-round text-2xl">workspace_premium</span>
+                                                </div>
+                                                <div>
+                                                    <div
+                                                        class="font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                                        Professor Elite
+                                                        <span
+                                                            class="bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">R$
+                                                            119,90/mês</span>
+                                                    </div>
+                                                    <div
+                                                        class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-3">
+                                                        <span>• Até 25 acessos</span>
+                                                        <span>• Turmas grandes</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div
+                                                class="ring-circle w-6 h-6 rounded-full border-2 border-slate-300 dark:border-slate-600 flex items-center justify-center transition-colors">
+                                                <span
+                                                    class="check-icon material-icons-round text-white text-sm opacity-0 transition-opacity">check</span>
+                                            </div>
+                                        </div>
+                                    </label>
+
+                                    <!-- Escola BÁSICO -->
+                                    <label class="cursor-pointer group relative">
+                                        <input type="radio" name="type" value="school_basic" class="peer sr-only">
+                                        <div
+                                            class="p-4 rounded-2xl border-2 border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-purple-200 dark:hover:border-purple-800 peer-checked:border-purple-500 peer-checked:ring-1 peer-checked:ring-purple-500 peer-checked:bg-purple-50/30 dark:peer-checked:bg-purple-900/10 transition-all duration-200 flex items-center justify-between peer-checked:[&_.ring-circle]:bg-purple-500 peer-checked:[&_.ring-circle]:border-purple-500 peer-checked:[&_.check-icon]:opacity-100">
+                                            <div class="flex items-center gap-4">
+                                                <div
+                                                    class="h-12 w-12 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-600 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                                                    <span class="material-icons-round text-2xl">business</span>
+                                                </div>
+                                                <div>
+                                                    <div
+                                                        class="font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                                        Escola Básico
+                                                        <span
+                                                            class="bg-purple-100 text-purple-700 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">R$
+                                                            349,90/mês</span>
+                                                    </div>
+                                                    <div
+                                                        class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex flex-col gap-0.5">
+                                                        <span>• Até 5 Professores</span>
+                                                        <span>• 20 acessos por professor</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div
+                                                class="ring-circle w-6 h-6 rounded-full border-2 border-slate-300 dark:border-slate-600 flex items-center justify-center transition-colors">
+                                                <span
+                                                    class="check-icon material-icons-round text-white text-sm opacity-0 transition-opacity">check</span>
+                                            </div>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <button type="submit"
+                                class="w-full bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200 text-white font-semibold py-4 rounded-xl shadow-lg transition-all duration-200 mt-4 flex items-center justify-center gap-2">
+                                <span>Criar Conta</span>
+                                <span class="material-icons-round text-sm">arrow_forward</span>
+                            </button>
+                        </form>
                     </div>
-                    <button class="btn btn-outline"
-                        style="background: transparent; color: white; border-color: rgba(255,255,255,0.2);"
-                        onclick="app.nextInSetlist()">Próxima →</button>
+
+                    <!-- Side Info (Optional / Decorative) -->
+                    <div
+                        class="hidden md:flex w-1/3 bg-emerald-950 relative overflow-hidden flex-col justify-between p-8 text-white">
+                        <img src="https://images.unsplash.com/photo-1510915361894-db8b60106cb1?q=80&w=2070&auto=format&fit=crop"
+                            class="absolute inset-0 w-full h-full object-cover opacity-40 mix-blend-overlay">
+
+                        <div class="relative z-10">
+                            <span class="material-symbols-rounded text-primary text-4xl mb-4 block">music_note</span>
+                            <h3 class="font-display text-2xl font-bold leading-tight">Junte-se à nossa comunidade.</h3>
+                        </div>
+
+                        <div class="relative z-10 space-y-4">
+                            <div class="flex items-center gap-3">
+                                <span class="bg-white/10 p-2 rounded-lg material-icons-round text-sm">check</span>
+                                <span class="text-sm text-emerald-100">Cifras ilimitadas</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <span class="bg-white/10 p-2 rounded-lg material-icons-round text-sm">check</span>
+                                <span class="text-sm text-emerald-100">Setlists inteligentes</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <span class="bg-white/10 p-2 rounded-lg material-icons-round text-sm">check</span>
+                                <span class="text-sm text-emerald-100">Modo aula ao vivo</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- TEMPLATE: HOME / DASHBOARD (Layout 2 continuação.txt) -->
+    <template id="view-home">
+        <div class="min-h-screen flex flex-col w-full relative">
+            <div class="fixed inset-0 pointer-events-none bg-texture z-0"></div>
+
+            <!-- Navbar -->
+            <nav class="sticky top-0 z-50 bg-nav-dark text-white border-b border-white/10 px-6 py-3 shadow-lg">
+                <div class="max-w-[1600px] mx-auto flex items-center justify-between">
+                    <div class="flex items-center space-x-8">
+                        <h1 class="font-display text-2xl font-bold text-primary tracking-tight">CifraProX</h1>
+                        <div class="hidden md:flex items-center space-x-6 text-sm font-medium text-slate-300">
+                            <a href="#" class="hover:text-primary transition-colors flex items-center gap-2">
+                                <span class="material-icons-round text-lg">library_music</span> Repertórios
+                            </a>
+                            <a href="#" class="hover:text-primary transition-colors flex items-center gap-2">
+                                <span class="material-icons-round text-lg">music_note</span> Acordes
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center space-x-4">
+                        <!-- Admin Link (Injected if role is admin) -->
+                        <div id="admin-link-container" class="hidden">
+                            <a href="javascript:void(0)" onclick="app.navigate('admin')"
+                                class="text-sm font-bold text-purple-400 hover:text-purple-300 transition-colors uppercase tracking-wider flex items-center gap-1">
+                                <span class="material-icons-round text-base">admin_panel_settings</span> Gestão
+                            </a>
+                        </div>
+
+                        <!-- Professor Link (Injected if role is professor/admin) -->
+                        <div id="school-link-container" class="hidden">
+                            <button id="btn-start-class" onclick="app.startClassroom()"
+                                class="bg-primary/20 hover:bg-primary/30 text-primary border border-primary/50 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all">
+                                <span class="material-icons-round text-sm">sensors</span> Iniciar Aula
+                            </button>
+                        </div>
+                        <button onclick="app.toggleTheme()"
+                            class="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-300">
+                            <span class="material-icons-round theme-icon">dark_mode</span>
+                        </button>
+                        <div class="h-8 w-px bg-white/10 mx-2"></div>
+                        <div class="flex items-center space-x-3 cursor-pointer group" onclick="app.logout()">
+                            <div class="text-right hidden sm:block">
+                                <p class="text-xs font-semibold" id="header-username">Usuario</p>
+                                <p class="text-[10px] text-slate-400 uppercase tracking-wider">Sair</p>
+                            </div>
+                            <div
+                                class="h-10 w-10 rounded-full bg-primary flex items-center justify-center font-bold text-white border-2 border-white/20 group-hover:scale-105 transition-transform">
+                                <span class="material-icons-round">logout</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+
+            <main class="relative z-10 max-w-[1600px] w-full mx-auto px-6 py-8 flex-1">
+                <div class="flex flex-col lg:flex-row gap-8">
+                    <!-- Main Content -->
+                    <div class="flex-1">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
+                            <div>
+                                <h2 class="font-display text-3xl font-bold dark:text-white">Meu Repertório</h2>
+                                <p class="text-slate-500 dark:text-slate-400 mt-1">Gerencie suas cifras.</p>
+                            </div>
+                            <button onclick="app.navigate('editor')"
+                                class="bg-primary hover:bg-primary-dark text-white px-6 py-3 rounded-full font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5 active:translate-y-0">
+                                <span class="material-icons-round">add</span>
+                                Nova Cifra
+                            </button>
+                        </div>
+
+                        <!-- Filtros (Visual apenas por enquanto) -->
+                        <div
+                            class="flex flex-wrap items-center gap-2 mb-8 bg-white dark:bg-slate-800/50 p-2 rounded-2xl border border-slate-200 dark:border-slate-700/50 shadow-sm">
+                            <div class="px-3 py-1 text-xs font-bold text-slate-400 uppercase tracking-widest">
+                                Filtros:
+                            </div>
+                            <div class="flex-1">
+                                <input type="text" placeholder="Buscar cifra..." oninput="app.searchCifras(this.value)"
+                                    class="w-full bg-transparent border-none text-sm focus:ring-0 text-slate-700 dark:text-white placeholder-slate-400">
+                            </div>
+                        </div>
+
+                        <!-- Grid de Cifras -->
+                        <div id="cifra-list" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                            <!-- Cards serão injetados aqui via JS -->
+                            <p class="col-span-full text-center text-slate-500">Carregando cifras...</p>
+                        </div>
+                    </div>
+
+                    <!-- Sidebar -->
+                    <aside class="w-full lg:w-80 shrink-0 hidden lg:block">
+                        <div
+                            class="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm sticky top-24">
+                            <h3 class="font-display font-bold text-xl mb-6 flex items-center gap-2 dark:text-white">
+                                <span class="material-icons-round text-primary">bolt</span> Atividade
+                            </h3>
+                            <div class="space-y-6">
+                                <!-- Dummy Activity -->
+                                <div class="flex gap-4">
+                                    <div
+                                        class="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 flex items-center justify-center shrink-0">
+                                        <span class="material-icons-round text-xl">playlist_add</span>
+                                    </div>
+                                    <div>
+                                        <p class="text-sm dark:text-slate-300">Você acessou o <span
+                                                class="font-bold text-primary">CifraProX</span></p>
+                                        <p class="text-[11px] text-slate-400 mt-1 uppercase font-semibold">Hoje
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </aside>
+                </div>
+            </main>
+        </div>
+    </template>
+
+    <!-- TEMPLATE: ADMIN PANEL -->
+    <template id="view-admin">
+        <div class="min-h-screen flex flex-col w-full bg-slate-50 dark:bg-slate-900">
+            <nav
+                class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-4 flex justify-between items-center sticky top-0 z-30">
+                <div class="flex items-center gap-4">
+                    <button onclick="app.navigate('home')"
+                        class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-colors">
+                        <span class="material-icons-round text-slate-500 dark:text-slate-400">arrow_back</span>
+                    </button>
+                    <h1 class="font-display font-bold text-xl dark:text-white">Gestão Administrativa</h1>
+                </div>
+                <div class="flex gap-2">
+                    <span
+                        class="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-bold uppercase tracking-wider">Modo
+                        Super Admin</span>
+                </div>
+            </nav>
+
+            <main class="flex-1 max-w-7xl mx-auto w-full p-6">
+                <!-- Stats Overview -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div
+                        class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                        <p class="text-sm text-slate-500 font-bold uppercase tracking-wider">Total Usuários</p>
+                        <p class="text-3xl font-display font-bold text-slate-800 dark:text-white mt-1"
+                            id="stat-total-users">...</p>
+                    </div>
+                    <div
+                        class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                        <p class="text-sm text-emerald-500 font-bold uppercase tracking-wider">Ativos</p>
+                        <p class="text-3xl font-display font-bold text-slate-800 dark:text-white mt-1"
+                            id="stat-active-users">...</p>
+                    </div>
+                    <div
+                        class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                        <p class="text-sm text-rose-500 font-bold uppercase tracking-wider">Inadimplentes</p>
+                        <p class="text-3xl font-display font-bold text-slate-800 dark:text-white mt-1"
+                            id="stat-suspended-users">...</p>
+                    </div>
+                </div>
+
+                <!-- Users Table -->
+                <div
+                    class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+                    <div class="p-6 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                        <h2 class="font-bold text-lg dark:text-white">Usuários e Licenças</h2>
+                        <button onclick="app.modalAddUser()"
+                            class="bg-primary hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2">
+                            <span class="material-icons-round text-sm">add</span> Novo Usuário
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm text-slate-600 dark:text-slate-400">
+                            <thead class="bg-slate-50 dark:bg-slate-700/50 text-xs uppercase font-bold text-slate-500">
+                                <tr>
+                                    <th class="px-6 py-4">Usuário</th>
+                                    <th class="px-6 py-4">Detalhes</th>
+                                    <th class="px-6 py-4">Role</th>
+                                    <th class="px-6 py-4">Plano</th>
+                                    <th class="px-6 py-4">Status</th>
+                                    <th class="px-6 py-4 text-right">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-users-list" class="divide-y divide-slate-100 dark:divide-slate-700">
+                                <!-- Rows Injected via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </template>
+
+    <!-- TEMPLATE: CLASSROOM (View Aluno/Professor) -->
+    <template id="view-classroom">
+        <div
+            class="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white text-center p-6 relative overflow-hidden">
+            <div
+                class="absolute inset-0 z-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]">
+            </div>
+
+            <div
+                class="relative z-10 max-w-lg w-full bg-slate-800/80 backdrop-blur-xl p-8 rounded-3xl border border-slate-700 shadow-2xl">
+                <div
+                    class="h-20 w-20 bg-primary rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-emerald-500/30">
+                    <span class="material-icons-round text-4xl text-white">school</span>
+                </div>
+                <h1 class="text-3xl font-display font-bold mb-2">Sala de Aula Virtual</h1>
+                <p class="text-slate-400 mb-8">Conecte-se para visualizar as cifras em tempo real.</p>
+
+                <div id="classroom-join-area">
+                    <input type="text" id="classroom-code-input" placeholder="Código da Aula (Ex: X7K9L2)"
+                        class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-center text-lg font-mono tracking-widest uppercase mb-4 focus:ring-2 focus:ring-primary focus:border-transparent outline-none">
+                    <button onclick="app.joinClassroom()"
+                        class="w-full bg-primary hover:bg-emerald-600 text-white font-bold py-3.5 rounded-xl transition-all active:scale-[0.98]">
+                        Entrar na Aula
+                    </button>
+                </div>
+
+                <div id="classroom-active-area" class="hidden">
+                    <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 mb-6">
+                        <p class="text-emerald-400 font-bold text-sm uppercase tracking-wider mb-1">Status</p>
+                        <p class="text-white font-mono text-lg">Conectado • <span id="classroom-timer">45:00</span></p>
+                    </div>
+                    <p class="text-sm text-slate-500">Aguardando professor selecionar a cifra...</p>
                 </div>
             </div>
         </div>
     </template>
 
     <template id="view-editor">
+        <div class="min-h-screen flex flex-col w-full bg-background-light dark:bg-background-dark">
+            <!-- Navbar Simplificada -->
+            <nav class="bg-nav-dark text-white px-6 py-3 flex justify-between items-center">
+                <div class="flex items-center gap-4">
+                    <button onclick="app.navigate('home')" class="hover:text-primary"><span
+                            class="material-icons-round">arrow_back</span></button>
+                    <h1 class="font-bold text-lg">Editor de Cifra</h1>
+                </div>
+            </nav>
 
-        <form onsubmit="app.saveCifra(event)">
-            <input type="hidden" name="id" id="edit-id">
-            <div class="input-group">
-                <label>Título da Música</label>
-                <input type="text" name="title" id="edit-title" required placeholder="Ex: Tempo Perdido">
-            </div>
-            <div class="input-group">
-                <label>Artista / Banda</label>
-                <input type="text" name="artist" id="edit-artist" required placeholder="Ex: Legião Urbana">
-            </div>
+            <main class="flex-1 max-w-5xl mx-auto w-full p-6">
+                <form onsubmit="app.saveCifra(event)" class="space-y-6">
+                    <input type="hidden" name="id">
 
-            <div class="input-group"
-                style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.8rem 1rem; margin-bottom: 2rem; flex-wrap: wrap; background: rgba(16, 185, 129, 0.03); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: var(--shadow-sm);">
-                <div style="display: flex; align-items: center; gap: 0.75rem;">
-                    <label class="premium-switch">
-                        <input type="checkbox" name="ready" id="edit-ready">
-                        <span class="premium-slider"></span>
-                    </label>
-                    <label for="edit-ready"
-                        style="margin: 0; cursor: pointer; color: var(--text-color); font-weight: 600; font-size: 0.95rem; letter-spacing: -0.2px;">
-                        Cifra Pronta
-                    </label>
-                </div>
-                <button type="button" class="btn btn-outline" onclick="app.importFromCifraClub()"
-                    style="border-color: var(--primary-color); color: var(--primary-color); font-size: 0.8rem; padding: 0.5rem 1rem; white-space: nowrap; height: 36px; border-radius: 8px; font-weight: 600; transition: all 0.3s ease;">
-                    ✨ Importar Cifras
-                </button>
-            </div>
-
-            <div class="form-grid">
-                <div class="input-group">
-                    <label>Tom</label>
-                    <input type="text" name="tom" id="edit-tom" placeholder="Ex: G, Am, E">
-                </div>
-                <div class="input-group">
-                    <label>Capotraste</label>
-                    <select name="capo" id="edit-capo" style="width:100%; padding:0.5rem;">
-                        <option value="">Sem Capo</option>
-                        <option value="1ª Casa">1ª Casa</option>
-                        <option value="2ª Casa">2ª Casa</option>
-                        <option value="3ª Casa">3ª Casa</option>
-                        <option value="4ª Casa">4ª Casa</option>
-                        <option value="5ª Casa">5ª Casa</option>
-                        <option value="6ª Casa">6ª Casa</option>
-                        <option value="7ª Casa">7ª Casa</option>
-                        <option value="8ª Casa">8ª Casa</option>
-                        <option value="9ª Casa">9ª Casa</option>
-                    </select>
-                </div>
-                <div class="input-group">
-                    <label>Gênero Musical</label>
-                    <select name="genre" id="edit-genre" style="width:100%; padding:0.5rem;">
-                        <option value="">Selecione...</option>
-                        <option value="Sertanejo">Sertanejo</option>
-                        <option value="Rock">Rock</option>
-                        <option value="MPB">MPB</option>
-                        <option value="Acústico">Acústico</option>
-                    </select>
-                </div>
-                <div class="input-group">
-                    <label>BPM (Metrônomo)</label>
-                    <input type="number" name="bpm" id="edit-bpm" min="30" max="300" placeholder="Ex: 120"
-                        style="width:100%;">
-                </div>
-                <div class="input-group">
-                    <label>YouTube</label>
-                    <input type="url" name="youtube" id="edit-youtube" placeholder="https://youtube.com/watch?v=..."
-                        style="width:100%;">
-                </div>
-                <div class="input-group">
-                    <label>YouTube (Vídeo de Treino)</label>
-                    <input type="url" name="youtubeTraining" id="edit-youtubeTraining"
-                        placeholder="Ex: aula, tutorial, etc." style="width:100%;">
-                </div>
-                <div class="input-group">
-                    <label>Velocidade Mobile</label>
-                    <input type="number" name="scrollSpeedMobile" id="edit-scrollSpeedMobile" min="1" max="100" required
-                        value="1" style="width: 100%;">
-                </div>
-                <div class="input-group">
-                    <label>Velocidade Tablet / PC</label>
-                    <input type="number" name="scrollSpeed" id="edit-scrollSpeed" min="1" max="100" required value="1"
-                        style="width: 100%;">
-                </div>
-            </div>
-
-            <div class="input-group">
-                <label>Batida / Ritmo</label>
-                <div class="strumming-controls">
-                    <button type="button" class="btn btn-outline btn-icon"
-                        onclick="app.addStrum('batida circular.svg', 'C')" title="Circular"><img
-                            src="icons/batida circular.svg"></button>
-                    <button type="button" class="btn btn-outline btn-icon"
-                        onclick="app.addStrum('batida para baixo.svg', 'D')" title="Baixo"><img
-                            src="icons/batida para baixo.svg"></button>
-                    <button type="button" class="btn btn-outline btn-icon"
-                        onclick="app.addStrum('batida para cima.svg', 'U')" title="Cima"><img
-                            src="icons/batida para cima.svg"></button>
-                    <button type="button" class="btn btn-outline btn-icon" onclick="app.addStrum('abafado.svg', 'X')"
-                        title="Abafado"><img src="icons/abafado.svg"></button>
-                    <button type="button" class="btn btn-outline btn-icon"
-                        onclick="app.addStrum('abafado para baixo.svg', 'd')" title="Abafado Baixo"><img
-                            src="icons/abafado para baixo.svg"></button>
-                    <button type="button" class="btn btn-outline btn-icon"
-                        onclick="app.addStrum('abafado para cima.svg', 'u')" title="Abafado Cima"><img
-                            src="icons/abafado para cima.svg"></button>
-                    <button type="button" class="btn btn-outline" onclick="app.addStrum('|', '|')"
-                        title="Divisão">|</button>
-                    <button type="button" class="btn btn-outline" onclick="app.addStrum('SPACE', ' ')"
-                        title="Espaço">Espaço</button>
-                    <button type="button" class="btn btn-outline"
-                        style="margin-left:auto; color: var(--primary-color); border-color: var(--primary-color);"
-                        onclick="app.clearStrum()">Limpar</button>
-                </div>
-                <!-- Hidden input to store actual value -->
-                <input type="hidden" name="strumming" id="edit-strumming">
-                <!-- Visual preview in editor -->
-                <div id="edit-strumming-preview" tabindex="0" onkeydown="app.handleStrumInput(event)"
-                    style="min-height: 50px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem; display: flex; gap: 4px; align-items: center; flex-wrap: wrap; box-shadow: 0 1px 2px rgba(0,0,0,0.05); cursor: text; outline: none;">
-                    <span style="color: var(--text-muted); font-size: 0.9rem; pointer-events: none;">Toque aqui para
-                        editar (Espaço ou Backspace)...</span>
-                </div>
-            </div>
-
-            <!-- Chords Gallery in Editor -->
-            <div id="edit-chords-container"
-                style="display:none; margin-bottom: 2rem; background: var(--card-bg); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border-color);">
-                <p style="font-size: 0.9rem; font-weight: 600; color: var(--text-color); margin-bottom: 1rem;">Gerenciar
-                    Acordes da Cifra:</p>
-                <div id="edit-chords-list" style="display: flex; gap: 1rem; flex-wrap: wrap;"></div>
-            </div>
-
-            <div class="input-group" style="flex: 1; display: flex; flex-direction: column;">
-                <div class="split-headers">
-                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                        <label style="margin:0;">Letra da Música</label>
-                        <button type="button" class="btn btn-outline"
-                            style="font-size: 0.75rem; padding: 0.2rem 0.6rem; border-color: var(--primary-color); color: var(--primary-color); display: flex; align-items: center; gap: 4px;"
-                            onclick="app.autoWrapChords()">
-                            <span>✨ Identificar Acordes</span>
-                        </button>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="space-y-2">
+                            <label class="text-sm font-bold text-slate-500">Título</label>
+                            <input name="title" required
+                                class="w-full rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800"
+                                placeholder="Nome da música">
+                        </div>
+                        <div class="space-y-2">
+                            <label class="text-sm font-bold text-slate-500">Artista</label>
+                            <input name="artist" required
+                                class="w-full rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800"
+                                placeholder="Nome do artista">
+                        </div>
                     </div>
-                    <div style="text-align: center; font-size: 0.9rem; font-weight: 500; color: var(--text-color);">
-                        Pré-visualização</div>
-                </div>
 
-                <div class="split-editor-container">
-                    <!-- Coluna da Esquerda: Editor -->
-                    <textarea name="content" id="edit-content"
-                        style="width: 100%; height: 100%; resize: none; font-family: monospace; font-size: 15px; line-height: 1.5; white-space: pre; border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; overflow-y: auto;"
-                        required placeholder="Cole a letra com os acordes entre colchetes, ex: [G] [Am]"
-                        oninput="app.updateEditorPreview()" onscroll="app.syncEditorScroll()">[p|0|0|]
-
-</textarea>
-
-                    <div id="edit-preview" class="cifra-content"
-                        style="width: 100%; height: 100%; border: 1px solid var(--border-color); border-radius: 8px; background: var(--card-bg); padding: 1rem; overflow-y: auto; font-family: monospace; font-size: 15px; white-space: pre-wrap; position: relative;">
-                        <!-- O conteúdo renderizado vai aqui -->
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <input name="tom" placeholder="Tom (Ex: G)"
+                            class="rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800">
+                        <input name="capo" placeholder="Capo"
+                            class="rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800">
+                        <input name="bpm" type="number" placeholder="BPM"
+                            class="rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800">
+                        <input name="genre" placeholder="Gênero"
+                            class="rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800">
                     </div>
-                </div>
 
-                <div class="tabs-editor-container" style="margin-top: 2rem;">
-                    <label>Solo / Tablatura / Dedilhado</label>
-                    <textarea name="tabs" id="edit-tabs"
-                        style="width: 100%; height: 200px; resize: vertical; font-family: monospace; font-size: 15px; line-height: 1.2; white-space: pre; border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem;"
-                        placeholder="Cole aqui solos, tablaturas ou orientações extras..."></textarea>
-                </div>
-            </div>
-            <div
-                style="margin-top: 1rem; margin-bottom: 1rem; background: rgba(0,0,0,0.05); padding: 1rem; border-radius: 8px; font-size: 0.85rem; color: var(--text-muted);">
-                <strong style="display:block; margin-bottom:0.5rem; color: var(--text-color);">💡 Dicas de
-                    Edição</strong>
-                <ul style="margin:0; padding-left: 1.2rem; line-height: 1.6;">
-                    <li>Use <strong>[Acorde]</strong> entre colchetes para destacar (ex: <code>[G]</code>,
-                        <code>[Am7]</code>).
-                    </li>
-                    <li><strong>Pausa no Scroll:</strong>
-                        <ul style="margin: 0.3rem 0;">
-                            <li><code>[p|5|]</code> Pausa o scroll por 5s quando chegar no meio da tela.</li>
-                            <li><strong>Multi-dispositivo:</strong> Use <code>[p|10|5|]</code> para tempos diferentes:
-                                <br><small>(10s Tablet/PC | 5s Celular)</small>
-                            </li>
-                        </ul>
-                    </li>
-                </ul>
-            </div>
-        </form>
+                    <div class="space-y-2">
+                        <label class="text-sm font-bold text-slate-500">Cifra (Cole aqui)</label>
+                        <textarea name="content" rows="15"
+                            class="w-full font-mono text-sm rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 p-4"
+                            placeholder="Cole a cifra com a letra..."></textarea>
+                    </div>
+
+                    <div class="flex justify-end gap-3">
+                        <button type="button" onclick="app.navigate('home')"
+                            class="px-6 py-2 rounded-full border border-slate-300 dark:border-slate-600 text-slate-500">Cancelar</button>
+                        <button type="submit"
+                            class="bg-primary hover:bg-emerald-600 text-white px-8 py-2 rounded-full font-bold shadow-lg">Salvar
+                            Cifra</button>
+                    </div>
+
+                    <!-- Campos hidden para compatibilidade -->
+                    <input type="hidden" name="tabs">
+                    <input type="hidden" name="youtube">
+                    <input type="hidden" name="youtubeTraining">
+                    <input type="checkbox" name="ready" checked class="hidden">
+                </form>
+            </main>
+        </div>
     </template>
 
-    <!-- Modal Seleção de Acordes -->
-    <div id="chord-selector-modal" class="modal"
-        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000; align-items:center; justify-content:center;">
-        <div class="modal-content"
-            style="background:var(--card-bg); padding:1.5rem; border-radius:8px; width:90%; max-width:800px; max-height:90vh; overflow-y:auto; border:1px solid var(--border-color);">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
-                <h2 style="margin:0;">Selecionar Acorde</h2>
-                <button class="btn btn-outline" onclick="app.closeChordSelector()">Fechar</button>
+    <!-- Scripts -->
+    <script src="chords.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html><!-- TEMPLATE: ADMIN / GESTÃO (Injected via JS previously, now hardcoded) -->
+<template id="view-admin">
+    <div class="min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col relative w-full">
+        <nav
+            class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-4 shadow-sm z-10 flex items-center gap-4 sticky top-0">
+            <button onclick="app.navigate('home')"
+                class="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white transition-colors">
+                <span class="material-icons-round">arrow_back</span>
+            </button>
+            <h1 class="font-display text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                <span class="material-icons-round text-purple-500">admin_panel_settings</span>
+                Gestão Administrativa
+            </h1>
+            <div class="flex-1"></div>
+            <div
+                class="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
+                Modo Super Admin</div>
+        </nav>
+
+        <main class="flex-1 p-6 md:p-10 max-w-7xl mx-auto w-full z-0">
+            <!-- Stats Row -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+                <div
+                    class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700/50">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Total Usuários</p>
+                    <h3 class="text-4xl font-display font-bold text-slate-700 dark:text-white" id="stat-total-users">...
+                    </h3>
+                </div>
+                <div
+                    class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700/50">
+                    <p class="text-xs font-bold text-emerald-500 uppercase tracking-wider mb-2">Ativos</p>
+                    <h3 class="text-4xl font-display font-bold text-slate-700 dark:text-white" id="stat-active-users">
+                        ...</h3>
+                </div>
+                <div
+                    class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700/50">
+                    <p class="text-xs font-bold text-rose-500 uppercase tracking-wider mb-2">Inadimplentes</p>
+                    <h3 class="text-4xl font-display font-bold text-slate-700 dark:text-white"
+                        id="stat-suspended-users">...</h3>
+                </div>
             </div>
 
-            <!-- Lista de Bases (C, D, E...) -->
-            <div id="chord-bases"
-                style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem; border-bottom:1px solid var(--border-color); padding-bottom:1rem;">
-                <!-- Preenchido via JS -->
+            <!-- Users Table -->
+            <div
+                class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700/50 overflow-hidden">
+                <div class="p-6 border-b border-slate-100 dark:border-slate-700/50 flex items-center justify-between">
+                    <h3 class="font-bold text-lg text-slate-700 dark:text-white">Usuários e Licenças</h3>
+                    <button onclick="app.modalAddUser()"
+                        class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-2">
+                        <span class="material-icons-round text-base">add</span> Novo Usuário
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr
+                                class="bg-slate-50 dark:bg-slate-700/30 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                                <th class="px-6 py-4">Usuário</th>
+                                <th class="px-6 py-4">Role</th>
+                                <th class="px-6 py-4">Plano</th>
+                                <th class="px-6 py-4">Status</th>
+                                <th class="px-6 py-4 text-right">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-users-list" class="divide-y divide-slate-100 dark:divide-slate-700/50 text-sm">
+                            <!-- JS Injects Here -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
-
-            <!-- Variações do Acorde Selecionado -->
-            <div id="chord-variations" style="display:flex; gap:1rem; flex-wrap:wrap;">
-                <p style="color:var(--text-muted)">Selecione um tom acima...</p>
-            </div>
-        </div>
+        </main>
     </div>
+</template>
 
-    <!-- Container para Modais Premium -->
-    <div id="modal-root"></div>
+<!-- Firebase SDKs (Compat) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
-                    .then(registration => {
-                        console.log('SW Registered:', registration);
+<!-- Scripts -->
+<script src="chords.js"></script>
+<script src="app.js"></script>
 
-                        // Check for updates
-                        registration.addEventListener('updatefound', () => {
-                            const newWorker = registration.installing;
-                            newWorker.addEventListener('statechange', () => {
-                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                    // New version available!
-                                    // Assuming skipping waiting is handled in SW, this isn't strictly needed for reload but good for UI
-                                }
-                            });
-                        });
-                    })
-                    .catch(err => console.log('SW Registration failed:', err));
-
-                // Reload page when new SW takes control
-                let refreshing;
-                navigator.serviceWorker.addEventListener('controllerchange', () => {
-                    if (refreshing) return;
-                    window.location.reload();
-                    refreshing = true;
-                });
-            });
-        }
-    </script>
-    <script src="chords.js?v=24"></script>
-    <script src="app.js?v=33"></script>
 </body>
 
 </html>

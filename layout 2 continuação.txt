@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html class="light" lang="pt-br"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CifraProX - Dashboard de Repertório</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#10b981", // Emerald 500
+                        "primary-dark": "#059669",
+                        "background-light": "#f8f9f8",
+                        "background-dark": "#0f172a",
+                        "nav-dark": "#13231d",
+                    },
+                    fontFamily: {
+                        display: ["Outfit", "sans-serif"],
+                        sans: ["Inter", "sans-serif"],
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.75rem",
+                    },
+                },
+            },
+        };
+        function toggleDarkMode() {
+            document.documentElement.classList.toggle('dark');
+        }
+    </script>
+<style>.bg-texture {
+    background-image: url(https://lh3.googleusercontent.com/aida-public/AB6AXuC8MjUsHRH0CLGsoN6Ldg9T3GHJlKp4423gpnESyspbcGUxjV5y4s_aKg342EP790-dTX82lAUvJzqQARkl4j0b_-rLpNP7K-PCAHKLhS8Em9mpBnrJ3mF4tTIKux6npLViM1jrD-s1I-4bx1KFr9QYS09-ihDmLSgwgJJ8HOQFBVtJ83iWm0fy7xKnSkqwoDi1CVX5Wt1hciaqDZfqelJMJR86JfSp6BChhG8QBGEBiBKvHnh2gGg4ORMOM1-62_LWPHPL2Z71P1o);
+    opacity: 0.03
+    }
+.dark .bg-texture {
+    opacity: 0.05;
+    filter: invert(1)
+    }
+.custom-scrollbar::-webkit-scrollbar {
+    width: 6px
+    }
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent
+    }
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 10px
+    }
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #334155
+    }</style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-800 dark:text-slate-200 font-sans min-h-screen">
+<div class="fixed inset-0 pointer-events-none bg-texture z-0"></div>
+<nav class="sticky top-0 z-50 bg-nav-dark text-white border-b border-white/10 px-6 py-3 shadow-lg">
+<div class="max-w-[1600px] mx-auto flex items-center justify-between">
+<div class="flex items-center space-x-8">
+<h1 class="font-display text-2xl font-bold text-primary tracking-tight">CifraProX</h1>
+<div class="hidden md:flex items-center space-x-6 text-sm font-medium text-slate-300">
+<a class="hover:text-primary transition-colors flex items-center gap-2" href="#">
+<span class="material-icons-round text-lg">library_music</span> Repertórios
+                    </a>
+<a class="hover:text-primary transition-colors flex items-center gap-2" href="#">
+<span class="material-icons-round text-lg">music_note</span> Acordes
+                    </a>
+</div>
+</div>
+<div class="flex-1 max-w-xl mx-8 hidden lg:block">
+<div class="relative group">
+<span class="material-icons-round absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors">search</span>
+<input class="w-full bg-white/10 border-none rounded-full py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-primary focus:bg-white/20 transition-all placeholder-slate-400" placeholder="Pesquisar por música, artista ou álbum..." type="text"/>
+</div>
+</div>
+<div class="flex items-center space-x-4">
+<button class="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-300" onclick="toggleDarkMode()">
+<span class="material-icons-round">dark_mode</span>
+</button>
+<div class="h-8 w-px bg-white/10 mx-2"></div>
+<div class="flex items-center space-x-3 cursor-pointer group">
+<div class="text-right hidden sm:block">
+<p class="text-xs font-semibold">Gabriel Santos</p>
+<p class="text-[10px] text-slate-400 uppercase tracking-wider">Premium Plan</p>
+</div>
+<div class="h-10 w-10 rounded-full bg-primary flex items-center justify-center font-bold text-white border-2 border-white/20 group-hover:scale-105 transition-transform">
+                        GS
+                    </div>
+</div>
+</div>
+</div>
+</nav>
+<main class="relative z-10 max-w-[1600px] mx-auto px-6 py-8">
+<div class="flex flex-col lg:flex-row gap-8">
+<div class="flex-1">
+<div class="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
+<div>
+<h2 class="font-display text-3xl font-bold dark:text-white">Meu Repertório</h2>
+<p class="text-slate-500 dark:text-slate-400 mt-1">Gerencie suas cifras e tablaturas favoritas.</p>
+</div>
+<button class="bg-primary hover:bg-primary-dark text-white px-6 py-3 rounded-full font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5 active:translate-y-0">
+<span class="material-icons-round">add</span>
+                        Nova Cifra
+                    </button>
+</div>
+<div class="flex flex-wrap items-center gap-2 mb-8 bg-white dark:bg-slate-800/50 p-2 rounded-2xl border border-slate-200 dark:border-slate-700/50 shadow-sm">
+<div class="px-3 py-1 text-xs font-bold text-slate-400 uppercase tracking-widest">Filtros:</div>
+<button class="bg-primary/10 text-primary px-4 py-1.5 rounded-full text-sm font-semibold flex items-center gap-1.5">
+                        Gênero: Rock <span class="material-icons-round text-sm">close</span>
+</button>
+<button class="bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 px-4 py-1.5 rounded-full text-sm font-medium transition-colors">Capo</button>
+<button class="bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 px-4 py-1.5 rounded-full text-sm font-medium transition-colors">Afinação</button>
+<button class="bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 px-4 py-1.5 rounded-full text-sm font-medium transition-colors">Dificuldade</button>
+<div class="flex-1"></div>
+<button class="text-slate-500 hover:text-primary p-2 transition-colors">
+<span class="material-icons-round">tune</span>
+</button>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+<div class="group bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-5 rounded-3xl shadow-sm hover:shadow-xl hover:border-primary/50 transition-all">
+<div class="flex justify-between items-start mb-4">
+<div class="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+<span class="material-icons-round text-3xl">album</span>
+</div>
+<div class="flex space-x-1">
+<span class="material-icons-round text-yellow-400 text-lg">star</span>
+<button class="text-slate-300 hover:text-slate-500 dark:hover:text-slate-400 transition-colors">
+<span class="material-icons-round text-xl">more_vert</span>
+</button>
+</div>
+</div>
+<h3 class="font-display font-bold text-lg dark:text-white mb-1 group-hover:text-primary transition-colors">Comfortably Numb</h3>
+<p class="text-slate-500 dark:text-slate-400 text-sm mb-4">Pink Floyd</p>
+<div class="flex flex-wrap gap-2 mb-4">
+<span class="bg-slate-100 dark:bg-slate-700/50 px-2 py-1 rounded-md text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase">Rock</span>
+<span class="bg-slate-100 dark:bg-slate-700/50 px-2 py-1 rounded-md text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase">Capo 0</span>
+<span class="bg-primary/10 text-primary px-2 py-1 rounded-md text-[10px] font-bold uppercase">Avançado</span>
+</div>
+<div class="pt-4 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between text-xs text-slate-400">
+<span class="flex items-center gap-1"><span class="material-icons-round text-sm">schedule</span> há 2 dias</span>
+<span class="flex items-center gap-1"><span class="material-icons-round text-sm">visibility</span> 12.4k</span>
+</div>
+</div>
+<div class="group bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-5 rounded-3xl shadow-sm hover:shadow-xl hover:border-primary/50 transition-all">
+<div class="flex justify-between items-start mb-4">
+<div class="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+<span class="material-icons-round text-3xl">album</span>
+</div>
+<div class="flex space-x-1">
+<span class="material-icons-round text-slate-200 dark:text-slate-600 text-lg">star_outline</span>
+<button class="text-slate-300 hover:text-slate-500 dark:hover:text-slate-400 transition-colors">
+<span class="material-icons-round text-xl">more_vert</span>
+</button>
+</div>
+</div>
+<h3 class="font-display font-bold text-lg dark:text-white mb-1 group-hover:text-primary transition-colors">Wonderwall</h3>
+<p class="text-slate-500 dark:text-slate-400 text-sm mb-4">Oasis</p>
+<div class="flex flex-wrap gap-2 mb-4">
+<span class="bg-slate-100 dark:bg-slate-700/50 px-2 py-1 rounded-md text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase">Britpop</span>
+<span class="bg-slate-100 dark:bg-slate-700/50 px-2 py-1 rounded-md text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase">Capo 2</span>
+<span class="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 px-2 py-1 rounded-md text-[10px] font-bold uppercase">Fácil</span>
+</div>
+<div class="pt-4 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between text-xs text-slate-400">
+<span class="flex items-center gap-1"><span class="material-icons-round text-sm">schedule</span> há 5 horas</span>
+<span class="flex items-center gap-1"><span class="material-icons-round text-sm">visibility</span> 45k</span>
+</div>
+</div>
+<div class="group bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-5 rounded-3xl shadow-sm hover:shadow-xl hover:border-primary/50 transition-all">
+<div class="flex justify-between items-start mb-4">
+<div class="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+<span class="material-icons-round text-3xl">album</span>
+</div>
+<div class="flex space-x-1">
+<span class="material-icons-round text-yellow-400 text-lg">star</span>
+<button class="text-slate-300 hover:text-slate-500 dark:hover:text-slate-400 transition-colors">
+<span class="material-icons-round text-xl">more_vert</span>
+</button>
+</div>
+</div>
+<h3 class="font-display font-bold text-lg dark:text-white mb-1 group-hover:text-primary transition-colors">Sultans of Swing</h3>
+<p class="text-slate-500 dark:text-slate-400 text-sm mb-4">Dire Straits</p>
+<div class="flex flex-wrap gap-2 mb-4">
+<span class="bg-slate-100 dark:bg-slate-700/50 px-2 py-1 rounded-md text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase">Classic Rock</span>
+<span class="bg-slate-100 dark:bg-slate-700/50 px-2 py-1 rounded-md text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase">Capo 0</span>
+<span class="bg-primary/10 text-primary px-2 py-1 rounded-md text-[10px] font-bold uppercase">Intermediário</span>
+</div>
+<div class="pt-4 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between text-xs text-slate-400">
+<span class="flex items-center gap-1"><span class="material-icons-round text-sm">schedule</span> há 1 semana</span>
+<span class="flex items-center gap-1"><span class="material-icons-round text-sm">visibility</span> 8k</span>
+</div>
+</div>
+</div>
+</div>
+<aside class="w-full lg:w-80 shrink-0">
+<div class="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm sticky top-24">
+<h3 class="font-display font-bold text-xl mb-6 flex items-center gap-2 dark:text-white">
+<span class="material-icons-round text-primary">bolt</span> Atividade Recente
+                    </h3>
+<div class="space-y-6">
+<div class="flex gap-4">
+<div class="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 flex items-center justify-center shrink-0">
+<span class="material-icons-round text-xl">edit</span>
+</div>
+<div>
+<p class="text-sm dark:text-slate-300"><span class="font-bold">Editou</span> "Blackbird" de The Beatles</p>
+<p class="text-[11px] text-slate-400 mt-1 uppercase font-semibold">Ontem às 14:30</p>
+</div>
+</div>
+<div class="flex gap-4">
+<div class="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 flex items-center justify-center shrink-0">
+<span class="material-icons-round text-xl">playlist_add</span>
+</div>
+<div>
+<p class="text-sm dark:text-slate-300"><span class="font-bold">Criou</span> nova playlist: <span class="text-primary italic">"Músicas Churrasco"</span></p>
+<p class="text-[11px] text-slate-400 mt-1 uppercase font-semibold">12 Nov 2023</p>
+</div>
+</div>
+<div class="flex gap-4">
+<div class="h-10 w-10 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 flex items-center justify-center shrink-0">
+<span class="material-icons-round text-xl">file_download</span>
+</div>
+<div>
+<p class="text-sm dark:text-slate-300"><span class="font-bold">Exportou</span> PDF de 5 cifras</p>
+<p class="text-[11px] text-slate-400 mt-1 uppercase font-semibold">10 Nov 2023</p>
+</div>
+</div>
+<div class="flex gap-4">
+<div class="h-10 w-10 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 flex items-center justify-center shrink-0">
+<span class="material-icons-round text-xl">favorite</span>
+</div>
+<div>
+<p class="text-sm dark:text-slate-300"><span class="font-bold">Favoritou</span> "Everlong" de Foo Fighters</p>
+<p class="text-[11px] text-slate-400 mt-1 uppercase font-semibold">08 Nov 2023</p>
+</div>
+</div>
+</div>
+<button class="w-full mt-8 py-3 text-sm font-semibold text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                        Ver todo o histórico
+                    </button>
+<div class="mt-8 p-4 bg-primary/5 dark:bg-primary/10 rounded-2xl border border-primary/20">
+<div class="flex justify-between items-center mb-2">
+<span class="text-xs font-bold text-primary uppercase">Progresso Semanal</span>
+<span class="text-xs font-bold text-primary">80%</span>
+</div>
+<div class="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+<div class="h-full bg-primary" style="width: 80%"></div>
+</div>
+<p class="text-[10px] text-slate-500 dark:text-slate-400 mt-2">Você aprendeu 4/5 novas cifras esta semana!</p>
+</div>
+</div>
+</aside>
+</div>
+</main>
+<button class="lg:hidden fixed bottom-6 right-6 h-14 w-14 bg-primary text-white rounded-full shadow-2xl flex items-center justify-center z-50">
+<span class="material-icons-round text-3xl">add</span>
+</button>
+
+</body></html>

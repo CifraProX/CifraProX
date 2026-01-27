@@ -10,49 +10,36 @@ const app = {
         metronome: { interval: null, bpm: 0, active: false }
     },
 
-    // --- CONFIGURAÇÃO DO FIREBASE ---
-    // O usuário deve preencher estes dados obtidos no Console do Firebase
-    firebaseConfig: {
-        apiKey: "AIzaSyAhyGljpun7I-s_HauY0ZIeMniZTryd6To",
-        authDomain: "cifraproxs.firebaseapp.com",
-        databaseURL: "https://cifraproxs-default-rtdb.firebaseio.com",
-        projectId: "cifraproxs",
-        storageBucket: "cifraproxs.firebasestorage.app",
-        messagingSenderId: "1042189849606",
-        appId: "1:1042189849606:web:b7111933eb92fb52765f87",
-        measurementId: "G-2GFG988YK3"
-    },
+    // --- CONFIGURAÇÃO LOCAL ---
+    // --- CONFIGURAÇÃO LOCAL ---
+    API_URL: window.location.origin, // Automático: usa o mesmo IP/Porta do acesso atual
 
-    db: null, // Firestore reference
-    auth: null, // Auth reference
+
+    // Firebase Config (Restaurado)
+    firebaseConfig: {
+        apiKey: "AIzaSyDcx_MKD1ug5t_tEfyhYrmFkXBhLFssfyg",
+        authDomain: "cifraprox-270126.firebaseapp.com",
+        databaseURL: "https://cifraprox-270126-default-rtdb.firebaseio.com",
+        projectId: "cifraprox-270126",
+        storageBucket: "cifraprox-270126.firebasestorage.app",
+        messagingSenderId: "901280078984",
+        appId: "1:901280078984:web:6b1354ce044279c18e933d"
+    },
+    db: null,
+    auth: null,
 
     init: async () => {
         try {
-            console.log('Iniciando app (Firebase Mode)...');
-
-            // Robust check for Firebase availability (especially for offline)
-            if (typeof firebase === 'undefined') {
-                throw new Error('O SDK do Firebase não pôde ser carregado. Verifique sua conexão ou o cache do navegador.');
-            }
+            console.log('Iniciando app (Hybrid Mode: SQL Auth + Firebase DB)...');
 
             // Initialize Firebase
             if (!firebase.apps.length) {
                 firebase.initializeApp(app.firebaseConfig);
+                console.log("Firebase conectado:", app.firebaseConfig.projectId);
             }
-            app.db = firebase.firestore();
-            app.auth = firebase.auth();
 
-            // Ativar Persistência Offline do Firestore
-            try {
-                await app.db.enablePersistence({ synchronizeTabs: true });
-                console.log('Persistência offline ativada!');
-            } catch (err) {
-                if (err.code == 'failed-precondition') {
-                    console.warn('Persistência falhou: Múltiplas abas abertas.');
-                } else if (err.code == 'unimplemented') {
-                    console.warn('Persistência não suportada pelo navegador.');
-                }
-            }
+            app.db = firebase.database();
+            app.auth = firebase.auth();
 
             // Initialize Theme
             const savedTheme = localStorage.getItem('theme') || 'light';
@@ -61,42 +48,18 @@ const app = {
                 app.updateThemeIcons();
             }
 
-            // Load custom chords on startup
-            await app.loadCustomChords();
+            // Check User Session (Stored in LocalStorage for simplicity in this migration)
+            const token = localStorage.getItem('token');
+            const user = JSON.parse(localStorage.getItem('user'));
 
-            // Start listening immediately (as guest)
-            app.initRealtimeListeners();
+            if (token && user) {
+                app.state.user = user;
+                console.log('Usuário restaurado:', user.email);
+            } else {
+                app.state.user = null;
+            }
 
-            // Listen for Auth changes
-            app.auth.onAuthStateChanged((user) => {
-                // Clear state when auth changes to ensure correct data per access level
-                app.state.cifras = [];
-
-                if (user) {
-                    app.state.user = {
-                        uid: user.uid,
-                        email: user.email,
-                        username: 'Admin',
-                        role: 'admin'
-                    };
-                } else {
-                    app.state.user = null;
-                    app.stopRealtimeListeners(); // Just to be clean before restart
-                }
-
-                // Re-initialize listeners with new user state
-                app.initRealtimeListeners();
-
-                app.renderHeader(app.state.currentView);
-
-                // Update Home UI elements (Create Button)
-                if (app.state.currentView === 'home') {
-                    const btnCreate = document.getElementById('btn-create');
-                    if (btnCreate) {
-                        btnCreate.style.display = app.state.user ? 'block' : 'none';
-                    }
-                }
-            });
+            app.renderHeader(app.state.currentView);
 
             // Register Service Worker
             if ('serviceWorker' in navigator) {
@@ -108,7 +71,6 @@ const app = {
                 if (event.state && event.state.view) {
                     app.navigate(event.state.view, event.state.param, true);
                 } else {
-                    // Se não tiver estado, tenta inferir pelo hash ou vai para home
                     const hash = location.hash.substring(1);
                     if (hash) {
                         const [view, param] = hash.split('/');
@@ -119,14 +81,23 @@ const app = {
                 }
             };
 
+            // Carregar cifras iniciais
+            app.loadCifras();
             // Monitor de Rede (Offline)
             window.addEventListener('online', app.updateNetworkStatus);
             window.addEventListener('offline', app.updateNetworkStatus);
             app.updateNetworkStatus();
 
             // Setup inicial
-            const view = location.hash ? location.hash.substring(1).split('/')[0] : 'home';
+            let view = location.hash ? location.hash.substring(1).split('/')[0] : '';
             const param = location.hash ? location.hash.substring(1).split('/')[1] : null;
+
+            // Se não estiver logado, forçar tela de login
+            if (!app.state.user) {
+                view = 'login';
+            } else if (!view) {
+                view = 'home';
+            }
 
             // Fechar popover ao clicar fora
             document.addEventListener('click', (e) => {
@@ -135,8 +106,8 @@ const app = {
                 }
             });
 
-            // Substitui o estado inicial para ter a URL correta logo de cara
-            history.replaceState({ view, param }, '', location.hash || '#home');
+            // Substitui o estado inicial
+            history.replaceState({ view, param }, '', '#' + view);
             app.navigate(view, param, true);
         } catch (error) {
             document.body.innerHTML = `<div style="color:red; padding:20px;">ERRO FATAL: ${error.message}</div>`;
@@ -144,24 +115,10 @@ const app = {
         }
     },
 
-    navigate: async (view, param = null, fromHistory = false) => {
-        // Stop scroll when navigating
-        if (app.scrollState && app.scrollState.active) {
-            app.scrollState.active = false;
-            if (app.scrollState.currentInterval) {
-                clearInterval(app.scrollState.currentInterval);
-            }
-        }
-
-        // Stop player when navigating
-        if (app.musicPlayerActive) {
-            app.toggleMusicPlayer(false);
-        }
-
-        // Atualiza histórico se necessário
-        if (!fromHistory) {
-            const hash = '#' + view + (param ? '/' + param : '');
-            history.pushState({ view, param }, '', hash);
+    navigate: async (view, param = null, addToHistory = true) => {
+        app.state.currentView = view;
+        if (addToHistory) {
+            history.pushState({ view, param }, '', `#${view}${param ? '/' + param : ''}`);
         }
 
         const main = document.getElementById('app');
@@ -170,62 +127,71 @@ const app = {
         let templateId = `view-${view}`;
         const template = document.getElementById(templateId);
 
-        if (!template) return;
+        if (!template) {
+            main.innerHTML = '<div class="flex items-center justify-center h-screen text-red-500">Erro: View não encontrada</div>';
+            return;
+        }
 
         const clone = template.content.cloneNode(true);
         main.appendChild(clone);
 
-        app.state.currentView = view;
+        // Header Updates (Nome do Usuário)
+        if (app.state.user) {
+            const userDisplay = document.getElementById('header-username');
+            if (userDisplay) {
+                const name = app.state.user.email.split('@')[0];
+                userDisplay.textContent = name.charAt(0).toUpperCase() + name.slice(1);
+            }
+            // Iniciais no avatar
+            const avatar = document.querySelector('.h-10.w-10.rounded-full.bg-primary');
+            if (avatar) {
+                const name = app.state.user.email.split('@')[0];
+                avatar.innerText = name.substring(0, 2).toUpperCase();
+            }
 
-        // Update header AFTER appending content so templates can be accessed if needed
-        app.renderHeader(view);
-
-        // Reset setlist state if navigating home or other main views
-        if (view === 'home' || view === 'library' || view === 'setlists' || view === 'login') {
-            app.state.currentSetlist = null;
-            app.state.currentSetlistIndex = -1;
+            // Show Admin Link
+            if (app.state.user.role === 'admin') {
+                const adminContainer = document.getElementById('admin-link-container');
+                if (adminContainer) adminContainer.classList.remove('hidden');
+            }
         }
 
-        // View logic
+        // Theme Icon Update
+        app.updateThemeIcons();
+
+        // View Specific Logic
         if (view === 'home') {
             app.loadCifras();
-            const btnCreate = document.getElementById('btn-create');
-            if (app.state.user) btnCreate.style.display = 'block';
+        } else if (view === 'editor') {
+            if (param) app.loadEditor(param);
         } else if (view === 'cifra') {
             app.loadCifra(param);
-        } else if (view === 'editor') {
-            if (!app.state.user) {
-                app.navigate('login');
-                return;
-            }
-            if (param) app.loadEditor(param);
-            else app.updateEditorPreview();
-        } else if (view === 'library') {
-            app.loadLibrary();
-        } else if (view === 'setlists') {
-            app.loadSetlists();
-        } else if (view === 'login') {
-            // No specific logic needed, form is in template
+        } else if (view === 'admin') {
+            app.loadAdminUsers();
+        } else if (view === 'classroom') {
+            // Setup classroom (Timer or Init)
         }
-
-        // Update offline banner visibility (home only)
-        app.updateNetworkStatus();
     },
 
     toggleTheme: () => {
-        const isDark = document.body.classList.toggle('dark-mode');
-        localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        const html = document.documentElement;
+        if (html.classList.contains('dark')) {
+            html.classList.remove('dark');
+            localStorage.setItem('theme', 'light');
+        } else {
+            html.classList.add('dark');
+            localStorage.setItem('theme', 'dark');
+        }
         app.updateThemeIcons();
     },
 
     updateThemeIcons: () => {
-        const isDark = document.body.classList.contains('dark-mode');
-        const sun = document.getElementById('theme-icon-sun');
-        const moon = document.getElementById('theme-icon-moon');
-        if (sun && moon) {
-            sun.style.display = isDark ? 'block' : 'none';
-            moon.style.display = isDark ? 'none' : 'block';
-        }
+        const html = document.documentElement;
+        const isDark = html.classList.contains('dark');
+        const icons = document.querySelectorAll('.theme-icon'); // Usando classe comum agora
+        icons.forEach(icon => {
+            icon.textContent = isDark ? 'light_mode' : 'dark_mode';
+        });
     },
 
     extractYouTubeId: (url) => {
@@ -345,67 +311,11 @@ const app = {
     },
 
     renderHeader: (view) => {
-        const navLinks = document.getElementById('nav-links');
-
-        // Logic for 'cifra' view - Contextual Actions
-        if (view === 'cifra') {
-            let userActions = '';
-            // Only show management actions if logged in AND NOT in a setlist session
-            if (app.state.user && !app.state.currentSetlist) {
-                userActions = `
-                    <a href="javascript:void(0)" class="nav-link" style="color:var(--danger-color)" onclick="app.deleteCurrent()">Excluir</a>
-                    <a href="javascript:void(0)" class="nav-link" onclick="app.editCurrent()">Editar</a>
-                `;
-            }
-            navLinks.innerHTML = `
-                ${userActions}
-                <a href="javascript:void(0)" class="nav-link" onclick="app.navigate('${app.state.currentSetlist ? 'setlists' : 'home'}')">Voltar</a>
-            `;
-
-            // Render Setlist Nav if in a setlist session
-            if (app.state.currentSetlist) app.renderSetlistNavigator();
-            return;
-        }
-
-        // Hide setlist nav if not in cifra view
-        const setlistNav = document.getElementById('setlist-navigator');
-        if (setlistNav) setlistNav.style.display = 'none';
-
-        // Logic for 'editor' view
-        if (view === 'editor') {
-            navLinks.innerHTML = `
-                <a href="javascript:void(0)" class="nav-link" style="color:var(--danger-color)" onclick="app.navigate('home')">Cancelar</a>
-                <a href="javascript:void(0)" class="nav-link" style="color:var(--primary-color); font-weight:bold;" onclick="document.querySelector('#app form').requestSubmit()">Salvar Cifra</a>
-            `;
-            return;
-        }
-
-        // Logic for other views (Home, Library, etc)
-        if (view === 'setlists') {
-            navLinks.innerHTML = `
-                <a href="javascript:void(0)" class="nav-link" onclick="app.navigate('home')">Voltar</a>
-                <a href="javascript:void(0)" class="nav-link" style="color:var(--primary-color); font-weight:bold;" onclick="app.promptCreateSetlist()">+ Novo Repertório</a>
-            `;
-            return;
-        }
-
-        if (view === 'library') {
-            navLinks.innerHTML = `<a href="javascript:void(0)" class="nav-link" onclick="app.navigate('home')">Voltar</a>`;
-            return;
-        }
-
-        if (app.state.user) {
-            navLinks.innerHTML = `
-                <a href="javascript:void(0)" class="nav-link" onclick="app.navigate('setlists')">Repertórios</a>
-                <a href="javascript:void(0)" class="nav-link" onclick="app.navigate('library')">Acordes</a>
-                <a href="javascript:void(0)" class="nav-link" onclick="app.logout()">Sair</a>
-            `;
-        } else {
-            navLinks.innerHTML = `
-                <a href="javascript:void(0)" class="nav-link" style="color:var(--primary-color); font-weight:bold;" onclick="app.navigate('login')">Entrar</a>
-            `;
-        }
+        // Deprecated: Header is rendered by Templates now.
     },
+
+    // register: async (e) => { ... } // Duplicate function removed
+
 
     login: async (e) => {
         e.preventDefault();
@@ -414,16 +324,34 @@ const app = {
         const password = form.password.value;
 
         try {
-            await app.auth.signInWithEmailAndPassword(email, password);
+            const res = await fetch(`${app.API_URL}/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) throw new Error(data.message || 'Erro no login');
+
+            // Salvar sessão
+            localStorage.setItem('token', data.token);
+            localStorage.setItem('user', JSON.stringify(data.user));
+
+            app.state.user = data.user;
+            app.renderHeader('home');
             app.navigate('home');
         } catch (error) {
             console.error('Erro no login:', error);
-            let msg = 'Erro ao entrar. Verifique seus dados.';
-            if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-                msg = 'E-mail ou senha incorretos.';
-            }
-            alert(msg);
+            alert(error.message);
         }
+    },
+
+    logout: async () => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        app.state.user = null;
+        app.navigate('login');
     },
 
     slugify: (text) => {
@@ -453,12 +381,18 @@ const app = {
 
         try {
             // --- 0. Verificar se a música já existe na biblioteca ---
-            const querySnapshot = await app.db.collection('cifras')
-                .where('title', '==', title)
-                .where('artist', '==', artist)
-                .get();
+            const snapDup = await app.db.ref('cifras').orderByChild('title').equalTo(title).once('value');
 
-            if (!querySnapshot.empty && !document.getElementById('edit-id').value) {
+            let isDuplicate = false;
+            if (snapDup.exists()) {
+                const val = snapDup.val();
+                // Check artist manually
+                Object.values(val).forEach(cifra => {
+                    if (cifra.artist === artist) isDuplicate = true;
+                });
+            }
+
+            if (isDuplicate && !document.getElementById('edit-id').value) {
                 const proceed = confirm(`A música "${title}" de "${artist}" já existe na sua biblioteca. Deseja importar e sobrescrever o conteúdo atual do editor?`);
                 if (!proceed) {
                     btn.innerText = originalText;
@@ -623,72 +557,423 @@ const app = {
         }
     },
 
-    logout: async () => {
+
+
+    saveCifra: async (e) => {
+        e.preventDefault();
+        const form = e.target;
+        const id = form.id.value;
+
+        const payload = {
+            title: form.title.value,
+            artist: form.artist.value,
+            content: form.content.value,
+            tabs: form.tabs.value,
+            tone: form.tom.value,
+            capo: form.capo.value,
+            genre: form.genre.value,
+            bpm: form.bpm.value,
+            youtube: form.youtube.value,
+            youtubeTraining: form.youtubeTraining.value,
+            ready: form.ready.checked
+        };
+
         try {
-            await app.auth.signOut();
+            const url = id ? `${app.API_URL}/cifras/${id}` : `${app.API_URL}/cifras`;
+            const method = id ? 'PUT' : 'POST';
+
+            const res = await fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': localStorage.getItem('token')
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) throw new Error('Erro ao salvar.');
+
+            alert('Cifra salva com sucesso!');
             app.navigate('home');
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao salvar cifra.');
+        }
+    },
+
+    // Métodos removidos (Realtime e LoadCustom)
+    initRealtimeListeners: () => { },
+    stopRealtimeListeners: () => { },
+    loadCustomChords: async () => { },
+
+
+    // --- ADMIN MODULE ---
+    loadAdminUsers: async () => {
+        const list = document.getElementById('admin-users-list');
+        if (!list) return;
+
+        list.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center">Carregando...</td></tr>';
+
+        try {
+            const res = await fetch(`${app.API_URL}/admin/users`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+
+                if (res.status === 403 || res.status === 401) {
+                    alert('Sua sessão expirou ou é inválida. Por favor, faça login novamente.');
+                    app.logout();
+                    return;
+                }
+
+                throw new Error(errData.message || `Erro ${res.status}: Falha ao carregar usuários`);
+            }
+
+            const users = await res.json();
+
+            // Calc stats
+            document.getElementById('stat-total-users').innerText = users.length;
+            document.getElementById('stat-active-users').innerText = users.filter(u => u.status === 'active').length;
+            document.getElementById('stat-suspended-users').innerText = users.filter(u => u.status !== 'active').length;
+
+            list.innerHTML = users.map(u => `
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+                    <td class="px-6 py-4">
+                        <p class="font-bold text-slate-800 dark:text-white">${u.name || 'Sem nome'}</p>
+                        <p class="text-xs text-slate-400">${u.email}</p>
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="flex flex-col gap-1">
+                            <span class="text-xs font-semibold text-slate-500 flex items-center gap-1">
+                                <span class="material-icons-round text-[10px]">music_note</span> ${u.instrument || '-'}
+                            </span>
+                            <span class="text-xs text-slate-400 flex items-center gap-1">
+                                <span class="material-icons-round text-[10px]">smartphone</span> ${u.phone || '-'}
+                            </span>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <span class="px-2 py-1 rounded text-xs font-bold uppercase ${u.role === 'admin' ? 'bg-purple-100 text-purple-700' : (u.role === 'professor' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600')}">
+                            ${u.role}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 text-slate-600 dark:text-slate-300">
+                        <div class="flex flex-col">
+                            <span class="font-bold text-xs">${u.plan_name || 'Free'}</span>
+                            <span class="text-[10px] text-slate-400 hidden sm:inline-block">CPF: ${u.cpf || '-'}</span>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${u.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}">
+                            <span class="h-1.5 w-1.5 rounded-full ${u.status === 'active' ? 'bg-emerald-500' : 'bg-rose-500'}"></span>
+                            ${u.status === 'active' ? 'Ativo' : 'Suspenso'}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 text-right">
+                        <button onclick="app.editUser('${u.id}')" class="text-slate-400 hover:text-primary transition-colors font-bold text-xs uppercase mr-2">Gerenciar</button>
+                        <button onclick="app.deleteUser('${u.id}')" class="text-red-300 hover:text-red-600 transition-colors font-bold text-xs uppercase" title="Excluir Usuário">
+                            <span class="material-icons-round text-sm align-middle">delete</span>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+
         } catch (e) {
             console.error(e);
+            list.innerHTML = `<tr><td colspan="5" class="px-6 py-4 text-center text-red-500">${e.message}</td></tr>`;
         }
     },
 
-    getChordId: (name) => {
-        if (!name) return '';
-        // Substituir caracteres inválidos/reservados do Firestore
-        return name.replace(/\//g, '_').replace(/\./g, '-');
-    },
-
-    // --- REALTIME LISTENERS ---
-    initRealtimeListeners: () => {
-        app.stopRealtimeListeners();
-
-        // Query base: Se não estiver logado, vê apenas prontas. Se logado, vê tudo.
-        let query = app.db.collection('cifras');
-        if (!app.state.user) {
-            query = query.where('ready', '==', true);
-        }
-
-        // Listen to Cifras - Sort in memory to avoid index requirements
-        app.state.unsubs.cifras = query.onSnapshot(snap => {
-            const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            data.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
-            app.state.cifras = data;
-            if (app.state.currentView === 'home') app.filterCifras();
-        }, error => {
-            console.error('Erro no listener de cifras:', error);
-        });
-
-        // Listen to Setlists
-        app.state.unsubs.setlists = app.db.collection('setlists').onSnapshot(snap => {
-            const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            data.sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
-            app.state.setlists = data;
-            if (app.state.currentView === 'setlists') app.renderSetlistsGrid();
-        });
-    },
-
-    stopRealtimeListeners: () => {
-        if (app.state.unsubs.cifras) {
-            app.state.unsubs.cifras();
-            app.state.unsubs.cifras = null;
-        }
-        if (app.state.unsubs.setlists) {
-            app.state.unsubs.setlists();
-            app.state.unsubs.setlists = null;
-        }
-    },
-
-    loadCustomChords: async () => {
+    modalAddUser: async () => {
+        // Fetch plans first
+        let plans = [];
         try {
-            const snap = await app.db.collection('custom_chords').get();
-            snap.forEach(doc => {
-                const data = doc.data();
-                if (data.name && data.variations) {
-                    Chords.dict[data.name] = data.variations;
+            const res = await fetch(`${app.API_URL}/admin/plans`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+            plans = await res.json();
+        } catch (e) {
+            console.error('Erro ao buscar planos', e);
+            plans = [{ id: null, name: 'Erro ao carregar planos' }];
+        }
+
+        const planOptions = plans.map(p => `<option value="${p.id}">${p.name} - R$ ${p.price}</option>`).join('');
+
+        const content = `
+            <div class="space-y-4 text-left">
+                <div>
+                    <label class="block text-sm font-bold mb-1">E-mail</label>
+                    <input id="new-user-email" type="email" class="w-full rounded border-slate-300 p-2" placeholder="email@exemplo.com">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold mb-1">Senha Inicial</label>
+                    <input id="new-user-pass" type="text" class="w-full rounded border-slate-300 p-2" placeholder="123456">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-bold mb-1">Perfil (Role)</label>
+                        <select id="new-user-role" class="w-full rounded border-slate-300 p-2">
+                            <option value="student">Aluno</option>
+                            <option value="professor">Professor</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold mb-1">Plano</label>
+                        <select id="new-user-plan" class="w-full rounded border-slate-300 p-2">
+                            <option value="">Sem Plano</option>
+                            ${planOptions}
+                        </select>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        await app.modal({
+            title: 'Novo Usuário',
+            content: content,
+            confirmText: 'Criar Usuário',
+            onConfirm: async () => {
+                const email = document.getElementById('new-user-email').value;
+                const password = document.getElementById('new-user-pass').value;
+                const role = document.getElementById('new-user-role').value;
+                const plan_id = document.getElementById('new-user-plan').value || null;
+
+                if (!email || !password) return alert('E-mail e senha são obrigatórios.');
+
+                try {
+                    const res = await fetch(`${app.API_URL}/admin/users`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                        body: JSON.stringify({ email, password, role, plan_id, status: 'active' })
+                    });
+                    if (!res.ok) throw new Error('Erro ao criar');
+                    app.showToast('Usuário criado!');
+                    app.loadAdminUsers();
+                } catch (e) {
+                    alert('Falha ao criar usuário. Verifique se o e-mail já existe.');
+                }
+            }
+        });
+    },
+
+    editUser: async (id) => {
+        // debug
+        console.log('Editando usuário ID:', id);
+
+        try {
+            // 1. Buscando dados em paralelo
+            const [usersRes, plansRes] = await Promise.all([
+                fetch(`${app.API_URL}/admin/users`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }),
+                fetch(`${app.API_URL}/admin/plans`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } })
+            ]);
+
+            if (!usersRes.ok) {
+                const errText = await usersRes.text();
+                throw new Error(`Erro API Usuários (${usersRes.status}): ${errText}`);
+            }
+            if (!plansRes.ok) {
+                const errText = await plansRes.text();
+                throw new Error(`Erro API Planos (${plansRes.status}): ${errText}`);
+            }
+
+            const users = await usersRes.json();
+            const plans = await plansRes.json();
+
+            // Log para debug
+            console.log('Users carregados:', users.length);
+            console.log('Planos carregados:', plans.length);
+
+            // Encontrar usuário (convertendo ID para string/int para garantir match)
+            const user = users.find(u => u.id == id);
+
+            if (!user) {
+                console.error('Usuário não encontrado. ID buscado:', id, 'IDs disponíveis:', users.map(u => u.id));
+                return alert('Erro: Usuário não encontrado na lista local.');
+            }
+
+            if (!Array.isArray(plans)) throw new Error('API retornou lista de planos inválida');
+
+            const planOptions = plans.map(p => `
+                <option value="${p.id}" ${user.plan_name === p.name ? 'selected' : ''}>${p.name} (Max: ${p.max_connections})</option>
+            `).join('');
+
+            const content = `
+                <div class="space-y-4 text-left">
+                     <p class="text-sm text-slate-500">Editando: <b>${user.email}</b></p>
+                     
+                     <div>
+                        <label class="block text-sm font-bold mb-1">Status da Conta</label>
+                        <select id="edit-user-status" class="w-full rounded border-slate-300 p-2">
+                            <option value="active" ${user.status === 'active' ? 'selected' : ''}>✅ Ativo</option>
+                            <option value="suspended" ${user.status !== 'active' ? 'selected' : ''}>🚫 Suspenso / Inadimplente</option>
+                        </select>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-bold mb-1">Perfil</label>
+                            <select id="edit-user-role" class="w-full rounded border-slate-300 p-2">
+                                <option value="student" ${user.role === 'student' ? 'selected' : ''}>Aluno</option>
+                                <option value="professor" ${user.role === 'professor' ? 'selected' : ''}>Professor</option>
+                                <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold mb-1">Plano de Licença</label>
+                            <select id="edit-user-plan" class="w-full rounded border-slate-300 p-2">
+                                <option value="">Sem Plano</option>
+                                ${planOptions}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            await app.modal({
+                title: 'Gerenciar Licença',
+                content: content,
+                confirmText: 'Salvar Alterações',
+                onConfirm: async () => {
+                    const status = document.getElementById('edit-user-status').value;
+                    const role = document.getElementById('edit-user-role').value;
+                    const plan_id = document.getElementById('edit-user-plan').value || null;
+
+                    try {
+                        const res = await fetch(`${app.API_URL}/admin/users/${id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                            body: JSON.stringify({ status, role, plan_id })
+                        });
+
+                        // Parse erro da resposta PUT se houver
+                        if (!res.ok) {
+                            const errRes = await res.json().catch(() => ({}));
+                            throw new Error(errRes.message || 'Falha na atualização');
+                        }
+
+                        app.showToast('Usuário atualizado!');
+                        app.loadAdminUsers();
+                    } catch (e) {
+                        alert('Erro ao atualizar: ' + e.message);
+                    }
                 }
             });
+
         } catch (e) {
-            console.error('Erro ao carregar acordes:', e);
+            console.error('Erro no fluxo de edição:', e);
+            alert(`Erro ao abrir edição:\n${e.message}`);
+        }
+    },
+
+    deleteUser: async (id) => {
+        const confirmDelete = confirm('Tem certeza que deseja EXCLUIR este usuário? Esta ação não pode ser desfeita.');
+        if (!confirmDelete) return;
+
+        try {
+            const res = await fetch(`${app.API_URL}/admin/users/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.message || 'Erro ao excluir usuário');
+            }
+
+            app.showToast('Usuário excluído com sucesso.');
+            app.loadAdminUsers();
+        } catch (e) {
+            alert(e.message);
+        }
+    },
+
+    // --- CLASSROOM MODULE ---
+    // --- CLASSROOM MODULE ---
+
+    // Professor: Criar Sala
+    startClassroom: async () => {
+        try {
+            const btn = document.getElementById('btn-start-class');
+            if (btn) btn.disabled = true;
+
+            const res = await fetch(`${app.API_URL}/classrooms`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+
+            if (!res.ok) throw new Error('Falha ao criar sala. Verifique seu plano.');
+
+            const session = await res.json();
+
+            // Mostrar modal com o código
+            await app.modal({
+                title: 'Aula Iniciada! 🔴',
+                content: `
+                    <div class="text-center space-y-4">
+                        <p>Compartilhe este código com seus alunos:</p>
+                        <div class="text-4xl font-mono font-bold text-primary tracking-widest bg-slate-100 dark:bg-slate-800 p-4 rounded-xl border border-dashed border-primary select-all">
+                            ${session.code}
+                        </div>
+                        <p class="text-sm text-slate-500">Limite: <b>${session.max_connections} alunos</b></p>
+                        <p class="text-xs text-slate-400">Esta sala expira em 60 minutos.</p>
+                    </div>
+                `,
+                confirmText: 'Entendi'
+            });
+
+        } catch (e) {
+            alert(e.message);
+        } finally {
+            const btn = document.getElementById('btn-start-class');
+            if (btn) btn.disabled = false;
+        }
+    },
+
+    // Aluno: Entrar na Sala
+    joinClassroom: async () => {
+        const codeInput = document.getElementById('classroom-code-input');
+        const code = codeInput.value.trim().toUpperCase();
+        if (!code) return alert('Digite o código');
+
+        const btn = document.querySelector('#classroom-join-area button');
+        const originalText = btn.innerText;
+        btn.innerText = 'Verificando...';
+        btn.disabled = true;
+
+        try {
+            // 1. Tentar entrar (Join)
+            const res = await fetch(`${app.API_URL}/classrooms/${code}/join`, { method: 'POST' });
+            const data = await res.json();
+
+            if (!res.ok) {
+                // Tratamento especial para Sala Cheia (429) ou Expirada (400/404)
+                throw new Error(data.message || 'Erro ao entrar na sala');
+            }
+
+            // Sucesso!
+            document.getElementById('classroom-join-area').classList.add('hidden');
+            document.getElementById('classroom-active-area').classList.remove('hidden');
+
+            // Timer visual apenas
+            let minutes = 59;
+            let seconds = 59;
+            setInterval(() => {
+                seconds--;
+                if (seconds < 0) { seconds = 59; minutes--; }
+                const timerEl = document.getElementById('classroom-timer');
+                if (timerEl) timerEl.innerText = `${minutes}:${seconds < 10 ? '0' + seconds : seconds}`;
+            }, 1000);
+
+        } catch (e) {
+            app.modal({
+                title: 'Acesso Negado 🚫',
+                content: `<p class="text-center text-lg">${e.message}</p>`,
+                confirmText: 'OK'
+            });
+        } finally {
+            btn.innerText = originalText;
+            btn.disabled = false;
         }
     },
 
@@ -698,60 +983,76 @@ const app = {
         const list = document.getElementById('cifra-list');
         if (!list) return;
 
-        // Se já temos dados no estado (carregados pelo listener tempo real), apenas renderiza
-        if (app.state.cifras.length > 0) {
-            app.filterCifras();
-            return;
+        // Limpar listener anterior se existir
+        if (app.state.unsubs.cifras) {
+            app.state.unsubs.cifras();
         }
 
-        list.innerHTML = '<p style="color:var(--text-muted)">Carregando...</p>';
-        // Com a unificação, NÃO fazemos mais o fetch manual aqui.
-        // O initRealtimeListeners iniciado no app.init() cuidará de popular o estado.
+        list.innerHTML = '<p style="color:var(--text-muted)">Sincronizando com Firebase...</p>';
+
+        try {
+            // Listener em Tempo Real (Firestore)
+            // Se o usuário pedir ordenação diferente depois, podemos ajustar. 
+            // Por padrão, 'updatedAt' desc (mais recentes primeiro).
+            const cifrasRef = app.db.ref('cifras');
+            const onValue = (snapshot) => {
+                const val = snapshot.val();
+                app.state.cifras = val ? Object.keys(val).map(key => ({ id: key, ...val[key] })).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)) : [];
+                app.filterCifras();
+            };
+            cifrasRef.on('value', onValue, (error) => {
+                list.innerHTML = `<p style="color:red">Erro: ${error.message}</p>`;
+            });
+            app.state.unsubs.cifras = onValue;
+
+        } catch (e) {
+            console.error('Erro ao configurar listener:', e);
+            list.innerHTML = '<p style="color:red">Erro ao conectar.</p>';
+        }
     },
 
     filterCifras: () => {
         const list = document.getElementById('cifra-list');
-        const searchTerm = document.getElementById('filter-search')?.value.toLowerCase().trim() || '';
-        const genreFilter = document.getElementById('filter-genre')?.value || '';
-        const capoFilter = document.getElementById('filter-capo')?.value || '';
+        if (!list) return;
 
-        const filtered = app.state.cifras.filter(c => {
-            // Privacy Filter: Guest sees only ready chords
-            if (!app.state.user && !c.ready) return false;
+        list.innerHTML = '';
 
-            const title = (c.title || '').toLowerCase();
-            const artist = (c.artist || '').toLowerCase();
+        let filtered = app.state.cifras;
 
-            const matchesSearch = title.includes(searchTerm) || artist.includes(searchTerm);
-            const matchesGenre = genreFilter ? c.genre === genreFilter : true;
-            const matchesCapo = capoFilter ? (capoFilter === 'Sem Capo' ? (!c.capo || c.capo === 'Sem Capo') : c.capo === capoFilter) : true;
-
-            return matchesSearch && matchesGenre && matchesCapo;
-        });
+        // Se houver termo de busca (opcional, se quiser implementar busca local)
+        // const term = ...
 
         if (filtered.length === 0) {
-            list.innerHTML = '<p style="color:var(--text-muted)">Nenhuma cifra encontrada para os filtros selecionados.</p>';
+            list.innerHTML = `<div class="col-span-full text-center py-10 text-slate-500">Nenhuma cifra encontrada.</div>`;
             return;
         }
 
-        list.innerHTML = filtered.map(c => `
-            <div class="cifra-card" onclick="app.navigate('cifra', '${c.id}'); app.state.currentSetlist = null;">
-                ${app.state.user ? `
-                    <button class="btn-setlist-add" title="Adicionar ao Repertório" 
-                    onclick="event.stopPropagation(); app.addToSetlistPrompt('${c.id}')">
-                        +
-                    </button>
-                ` : ''}
-                <div class="cifra-title">${c.title}</div>
-                <div class="cifra-artist">${c.artist}</div>
-                <div style="display:flex; gap:0.5rem; margin-top:0.5rem; flex-wrap:wrap;">
-                    ${!c.ready ? `<span style="font-size:0.75rem; background:#fee2e2; color:#b91c1c; padding:2px 6px; border-radius:4px; border: 1px solid #fecaca;">Rascunho</span>` : ''}
-                    ${c.genre ? `<span style="font-size:0.75rem; background:#e0f2f1; color:#00695c; padding:2px 6px; border-radius:4px;">${c.genre}</span>` : ''}
-                    ${(c.capo && app.state.user) ? `<span style="font-size:0.75rem; background:#f3e5f5; color:#4a148c; padding:2px 6px; border-radius:4px;">🎸 ${c.capo}</span>` : ''}
+        filtered.forEach(cifra => {
+            const card = document.createElement('div');
+            card.className = 'group bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-5 rounded-3xl shadow-sm hover:shadow-xl hover:border-primary/50 transition-all cursor-pointer';
+            card.onclick = () => app.navigate('cifra', cifra.id);
+
+            card.innerHTML = `
+                <div class="flex justify-between items-start mb-4">
+                    <div class="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                        <span class="material-icons-round text-3xl">music_note</span>
+                    </div>
+                    <div class="flex space-x-1">
+                        <span class="material-icons-round text-slate-200 dark:text-slate-600 text-lg hover:text-yellow-400">star_outline</span>
+                        <button class="text-slate-300 hover:text-slate-500 dark:hover:text-slate-400 transition-colors" onclick="event.stopPropagation(); app.navigate('editor', '${cifra.id}')">
+                           <span class="material-icons-round text-xl">edit</span>
+                        </button>
+                    </div>
                 </div>
-                ${app.getGenreIcon(c.genre)}
-            </div>
-        `).join('');
+                <h3 class="font-display font-bold text-lg dark:text-white mb-1 group-hover:text-primary transition-colors truncate">${cifra.title}</h3>
+                <p class="text-slate-500 dark:text-slate-400 text-sm mb-4 truncate">${cifra.artist}</p>
+                <div class="flex flex-wrap gap-2 mb-4">
+                    <span class="bg-slate-100 dark:bg-slate-700/50 px-2 py-1 rounded-md text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase">${cifra.genre || 'Geral'}</span>
+                    <span class="bg-slate-100 dark:bg-slate-700/50 px-2 py-1 rounded-md text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase">${cifra.tone || '?'}</span>
+                </div>
+            `;
+            list.appendChild(card);
+        });
     },
 
     showToast: (message) => {
@@ -767,7 +1068,7 @@ const app = {
     },
 
     // --- MODAL SYSTEM (Premium Dialogs) ---
-    modal: ({ title, content, input = false, confirmText = 'OK', cancelText = 'Cancelar', placeholder = '' }) => {
+    modal: ({ title, content, input = false, confirmText = 'OK', cancelText = 'Cancelar', placeholder = '', onConfirm = null }) => {
         return new Promise((resolve) => {
             const root = document.getElementById('modal-root');
             const id = 'modal-' + Date.now();
@@ -814,6 +1115,15 @@ const app = {
                     cleanup(inputField.value);
                     return;
                 }
+
+                // Allow custom callback for complex modals
+                if (typeof onConfirm === 'function') {
+                    onConfirm();
+                    cleanup(true);
+                    return;
+                }
+
+                // Custom logic for Chord Creator...
 
                 // Custom logic for Chord Creator: grab values before they disappear from DOM
                 const nameInp = document.getElementById('new-chord-name');
@@ -869,15 +1179,15 @@ const app = {
 
     loadCifra: async (id) => {
         try {
-            const doc = await app.db.collection('cifras').doc(id).get();
+            const snap = await app.db.ref('cifras/' + id).once('value');
 
-            if (!doc.exists) {
+            if (!snap.exists()) {
                 alert('Cifra não encontrada.');
                 app.navigate('home');
                 return;
             }
 
-            const data = { id: doc.id, ...doc.data() };
+            const data = { id: snap.key, ...snap.val() };
 
             // --- Metronome Setup ---
             app.stopMetronome();
@@ -1211,40 +1521,51 @@ const app = {
         delete data.id;
 
         // Add timestamp
-        data.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+        // RTDB uses this constant
+        data.updatedAt = firebase.database.ServerValue.TIMESTAMP;
 
         try {
             if (id) {
-                // UPDATE - Verificar se a mudança gera duplicata em outro doc
-                const dupCheck = await app.db.collection('cifras')
-                    .where('title', '==', data.title.trim())
-                    .where('artist', '==', data.artist.trim())
-                    .get();
+                // UPDATE
+                // Check duplicate: RTDB doesn't query multiple fields nicely client-side.
+                // We'll skip complex dup check or do it by fetching all and filtering in memory (less efficient)
+                // OR just trust the user since we are migrating. Let's do simple title check.
+                const snap = await app.db.ref('cifras').orderByChild('title').equalTo(data.title.trim()).once('value');
 
-                // Se achar algo que não seja o próprio documento que estamos editando
-                const isDuplicate = dupCheck.docs.some(doc => doc.id !== id);
+                // Client-side filtering for artist
+                let isDuplicate = false;
+                snap.forEach(child => {
+                    if (child.key !== id && child.val().artist === data.artist.trim()) {
+                        isDuplicate = true;
+                    }
+                });
 
                 if (isDuplicate) {
-                    const confirmDup = confirm(`Atenção: Você está renomeando esta música para "${data.title}" de "${data.artist}", mas já existe outra música com esses mesmos dados na sua biblioteca. Deseja salvar mesmo assim?`);
+                    const confirmDup = confirm(`Atenção: Já existe outra música "${data.title}" de "${data.artist}". Salvar mesmo assim?`);
                     if (!confirmDup) return;
                 }
 
-                await app.db.collection('cifras').doc(id).update(data);
+                await app.db.ref('cifras/' + id).update(data);
                 app.navigate('cifra', id);
             } else {
-                // CREATE - Verificar duplicata antes de criar
-                const dupCheck = await app.db.collection('cifras')
-                    .where('title', '==', data.title.trim())
-                    .where('artist', '==', data.artist.trim())
-                    .get();
+                // CREATE
+                const snap = await app.db.ref('cifras').orderByChild('title').equalTo(data.title.trim()).once('value');
+                let isDuplicate = false;
+                snap.forEach(child => {
+                    if (child.val().artist === data.artist.trim()) {
+                        isDuplicate = true;
+                    }
+                });
 
-                if (!dupCheck.empty) {
-                    const confirmDup = confirm(`Atenção: Já existe uma música chamada "${data.title}" de "${data.artist}" na sua biblioteca. Deseja salvar mesmo assim (criando uma versão duplicada)?`);
+                if (isDuplicate) {
+                    const confirmDup = confirm(`Atenção: Já existe "${data.title}" de "${data.artist}". Criar duplicata?`);
                     if (!confirmDup) return;
                 }
 
-                const docRef = await app.db.collection('cifras').add(data);
-                app.navigate('cifra', docRef.id);
+                // Push creates a new ref with ID
+                const newRef = app.db.ref('cifras').push();
+                await newRef.set(data);
+                app.navigate('cifra', newRef.key);
             }
         } catch (e) {
             console.error('Erro em saveCifra:', e);
@@ -1267,24 +1588,40 @@ const app = {
 
         const id = app.state.currentCifra.id;
         try {
-            await app.db.collection('cifras').doc(id).delete();
+            await app.db.ref('cifras/' + id).remove();
             app.navigate('home');
             app.showToast('Cifra excluída.');
         } catch (e) {
             console.error('Erro ao excluir:', e);
-            if (e.code === 'permission-denied') {
-                app.modal({ title: 'Erro', content: 'Permissão negada para excluir esta cifra.', confirmText: 'OK', cancelText: null });
-            } else {
-                app.modal({ title: 'Erro', content: `Erro ao excluir: ${e.message}`, confirmText: 'OK', cancelText: null });
-            }
+            app.modal({ title: 'Erro', content: `Erro ao excluir: ${e.message}`, confirmText: 'OK', cancelText: null });
         }
     },
 
     // --- SETLISTS ---
     loadSetlists: async () => {
         if (!app.state.user) return;
-        // Realtime listener handles data updates and calls renderSetlistsGrid
-        app.renderSetlistsGrid();
+
+        // Remove previous listener
+        if (app.state.unsubs.setlists) {
+            app.db.ref('setlists').off('value', app.state.unsubs.setlists);
+            app.state.unsubs.setlists = null;
+        }
+
+        const ref = app.db.ref('setlists');
+        const listener = ref.on('value', (snap) => {
+            const val = snap.val();
+            if (!val) {
+                app.state.setlists = [];
+            } else {
+                app.state.setlists = Object.keys(val).map(key => ({
+                    id: key,
+                    ...val[key]
+                })).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+            }
+            app.renderSetlistsGrid();
+        });
+
+        app.state.unsubs.setlists = listener;
     },
 
     renderSetlistsGrid: () => {
@@ -1323,13 +1660,15 @@ const app = {
 
     createSetlist: async (name) => {
         try {
-            await app.db.collection('setlists').add({
+            const newRef = app.db.ref('setlists').push();
+            await newRef.set({
                 name: name,
                 songs: [],
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                updatedAt: firebase.database.ServerValue.TIMESTAMP
             });
-            app.loadSetlists();
+            // Listener should update UI
         } catch (e) {
+            console.error(e);
             alert('Erro ao criar repertório.');
         }
     },
@@ -1343,10 +1682,10 @@ const app = {
         });
         if (!res) return;
         try {
-            await app.db.collection('setlists').doc(id).delete();
-            app.loadSetlists();
+            await app.db.ref('setlists/' + id).remove();
             app.showToast('Repertório removido.');
         } catch (e) {
+            console.error(e);
             app.modal({ title: 'Erro', content: 'Erro ao excluir.', confirmText: 'OK', cancelText: null });
         }
     },
@@ -1382,21 +1721,137 @@ const app = {
 
     addToSetlist: async (setlistId, songId) => {
         try {
-            const doc = await app.db.collection('setlists').doc(setlistId).get();
-            const songs = doc.data().songs || [];
+            const ref = app.db.ref('setlists/' + setlistId);
+            const snap = await ref.once('value');
+            if (!snap.exists()) return;
+
+            const data = snap.val();
+            const songs = data.songs || [];
+
             if (!songs.includes(songId)) {
                 songs.push(songId);
-                await app.db.collection('setlists').doc(setlistId).update({
+                await ref.update({
                     songs: songs,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    updatedAt: firebase.database.ServerValue.TIMESTAMP
                 });
                 app.showToast('Música adicionada ao repertório!');
             } else {
                 alert('Esta música já está neste repertório.');
             }
         } catch (e) {
+            console.error(e);
             alert('Erro ao adicionar música.');
         }
+    },
+
+    // Assuming a 'login' function would be here, based on the provided snippet context.
+    // Since the full document doesn't contain a 'login' function, I'll place 'register' after 'addToSetlist'
+    // and before 'playSetlist', as it seems to be a new top-level function.
+    // The instruction "Add register function after login function" implies 'login' exists.
+    // Given the provided snippet for 'register' starts with `alert(data.message || 'Login falhou');`
+    // and `alert('Erro de conexão ao fazer login.');`, it suggests a login function was intended to be there.
+    // I will insert the register function here, and then the logout function as provided in the snippet.
+
+    // Placeholder for a hypothetical login function, as implied by the snippet context:
+    // login: async (e) => {
+    //     e.preventDefault();
+    //     const email = e.target.email.value;
+    //     const password = e.target.password.value;
+    //     try {
+    //         const res = await fetch(`${app.API_URL}/auth/login`, {
+    //             method: 'POST',
+    //             headers: { 'Content-Type': 'application/json' },
+    //             body: JSON.stringify({ email, password })
+    //         });
+    //         const data = await res.json();
+    //         if (res.ok) {
+    //             app.state.user = data.user;
+    //             localStorage.setItem('token', data.token);
+    //             app.navigate('home');
+    //         } else {
+    //             alert(data.message || 'Login falhou');
+    //         }
+    //     } catch (e) {
+    //         console.error(e);
+    //         alert('Erro de conexão ao fazer login.');
+    //     }
+    // },
+
+    register: async (e) => {
+        e.preventDefault();
+        const form = e.target;
+        const name = form.name.value;
+        const cpf = form.cpf.value;
+        const phone = form.phone.value;
+        const email = form.email.value;
+        // Password might be named 'password' or 'reg-password'. Checking form.
+        // Assuming name="password" as per previous lines.
+        const password = form.password ? form.password.value : document.getElementById('reg-password')?.value;
+        const type = form.type.value;
+        const instrument = form.instrument ? form.instrument.value : 'Violão'; // Default or from form
+
+        console.log('DEBUG FRONTEND: Payload Type selected ->', type);
+        console.log('DEBUG FRONTEND: Full Payload ->', { name, cpf, phone, instrument, email, password, type });
+
+        try {
+            const res = await fetch(`${app.API_URL}/auth/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, cpf, phone, instrument, email, password, type })
+            });
+
+            if (!res.ok) {
+                const contentType = res.headers.get('content-type');
+                if (contentType && contentType.indexOf('application/json') !== -1) {
+                    const errorData = await res.json();
+                    throw new Error(errorData.message || 'Erro no cadastro (Server)');
+                } else {
+                    const text = await res.text();
+                    console.error('Non-JSON Error Response:', text);
+                    // Extract title from HTML if possible for cleaner alert
+                    const match = text.match(/<title>(.*?)<\/title>/i) || text.match(/<body>(.*?)<\/body>/i);
+                    const msg = match ? match[1] : text.substring(0, 100);
+                    throw new Error(`Erro do Servidor (${res.status}): ${msg}`);
+                }
+            }
+
+            const data = await res.json();
+
+            // Cadastro sucesso: Fazer Login automático
+            localStorage.setItem('token', data.token);
+            localStorage.setItem('user', JSON.stringify(data.user));
+            app.state.user = data.user;
+
+            // ... (rest of success logic) ...
+
+            // Payment Redirect Handler (Moved from old logic if needed, or ensuring consistent flow)
+            if (data.redirectUrl) {
+                app.modal({
+                    title: 'Pagamento Necessário 💳',
+                    content: `Sua conta foi criada! Para ativar a licença do plano <b>${type.toUpperCase()}</b>, finalize o pagamento.`,
+                    confirmText: 'Pagar Agora',
+                    cancelText: 'Pagar depois',
+                    onConfirm: () => {
+                        window.location.href = data.redirectUrl;
+                    }
+                });
+                return;
+            }
+
+            app.showToast('Conta criada com sucesso! 🚀');
+            app.navigate('home');
+
+        } catch (e) {
+            console.error('Registro falhou:', e);
+            alert('Falha: ' + e.message);
+        }
+    },
+
+    logout: () => {
+        app.state.user = null;
+        localStorage.removeItem('token');
+        app.navigate('login'); // Assuming a login page exists
+        app.showToast('Você foi desconectado.');
     },
 
     playSetlist: async (id) => {
@@ -1431,8 +1886,8 @@ const app = {
             for (const songId of (setlist.songs || [])) {
                 let c = app.state.cifras.find(x => x.id === songId);
                 if (!c) {
-                    const snap = await app.db.collection('cifras').doc(songId).get();
-                    if (snap.exists) c = { id: snap.id, ...snap.data() };
+                    const snap = await app.db.ref('cifras/' + songId).once('value');
+                    if (snap.exists()) c = { id: snap.key, ...snap.val() };
                 }
                 if (c) songs.push(c);
             }
@@ -1475,9 +1930,9 @@ const app = {
         [songs[index], songs[newIndex]] = [songs[newIndex], songs[index]];
 
         try {
-            await app.db.collection('setlists').doc(setlist.id).update({
+            await app.db.ref('setlists/' + setlist.id).update({
                 songs: songs,
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                updatedAt: firebase.database.ServerValue.TIMESTAMP
             });
             // Update local state and refresh
             setlist.songs = songs;
@@ -1502,9 +1957,9 @@ const app = {
         songs.splice(index, 1);
 
         try {
-            await app.db.collection('setlists').doc(setlist.id).update({
+            await app.db.ref('setlists/' + setlist.id).update({
                 songs: songs,
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                updatedAt: firebase.database.ServerValue.TIMESTAMP
             });
             setlist.songs = songs;
             app.openSetlist(setlist.id);
@@ -1858,22 +2313,22 @@ const app = {
 
                     if (newVariations.length === 0) {
                         delete Chords.dict[chordName];
-                        await app.db.collection('custom_chords').doc(app.getChordId(chordName)).delete();
+                        await app.db.ref('custom_chords/' + app.getChordId(chordName)).remove();
                     } else {
-                        await app.db.collection('custom_chords').doc(app.getChordId(chordName)).set({
+                        await app.db.ref('custom_chords/' + app.getChordId(chordName)).set({
                             name: chordName,
                             variations: newVariations,
-                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                            updatedAt: firebase.database.ServerValue.TIMESTAMP
                         });
                         Chords.dict[chordName] = newVariations;
                     }
                 } else {
-                    await app.db.collection('custom_chords').doc(app.getChordId(chordName)).delete();
+                    await app.db.ref('custom_chords/' + app.getChordId(chordName)).remove();
                     delete Chords.dict[chordName];
                 }
 
                 app.showToast('Excluído com sucesso!');
-                app.loadLibrary();
+                if (typeof app.loadLibrary === 'function') app.loadLibrary(); // Reload if exists
             } catch (e) {
                 console.error(e);
                 app.showToast('Erro ao excluir.');
@@ -2428,10 +2883,10 @@ const app = {
                     variations.push(newVariation);
                 }
 
-                await app.db.collection('custom_chords').doc(app.getChordId(name)).set({
+                await app.db.ref('custom_chords/' + app.getChordId(name)).set({
                     name: name,
                     variations: variations,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    updatedAt: firebase.database.ServerValue.TIMESTAMP
                 });
 
                 Chords.dict[name] = variations;

@@ -19,7 +19,7 @@ const ASSETS = [
     './icons/genero_sertanejo.svg',
     './icons/repertorio.svg',
     'https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js',
-    'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js',
+    'https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js',
     'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js',
     'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'
 ];
@@ -53,6 +53,12 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+    // IGNORAR requisições de API (POST, PUT, DELETE, etc)
+    // Deixar passar direto para a rede/servidor
+    if (event.request.method !== 'GET') {
+        return;
+    }
+
     event.respondWith(
         caches.match(event.request).then((response) => {
             // Retorna o cache se encontrar, senão vai para a rede
