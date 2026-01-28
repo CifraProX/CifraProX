@@ -3,3 +3,10 @@ database/
 *.db
 .env
 api/
+
+# Firebase Keys
+*.json
+!package.json
+!manifest.json
+serviceAccountKey.json
+cifraprox-*.json

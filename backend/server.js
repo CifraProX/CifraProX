@@ -344,7 +344,7 @@ app.put('/school/professors/:id', authenticateToken, authorizeRole(['school']), 
 app.get('/admin/users', authenticateToken, authorizeRole(['admin']), async (req, res) => {
     try {
         const result = await db.query(`
-            SELECT u.id, u.name, u.email, u.phone, u.instrument, u.role, u.status, u.last_payment, p.name as plan_name 
+            SELECT u.id, u.name, u.email, u.phone, u.instrument, u.role, u.status, u.last_payment, u.plan_id, p.name as plan_name 
             FROM users u 
             LEFT JOIN plans p ON u.plan_id = p.id
             ORDER BY u.id ASC
