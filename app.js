@@ -16,36 +16,88 @@ const app = {
 
 
     // Firebase Config (Restaurado)
+    // Firebase Config (Corrigido)
     firebaseConfig: {
-        apiKey: "AIzaSyDcx_MKD1ug5t_tEfyhYrmFkXBhLFssfyg",
+        apiKey: "AIzaSyDcx_MKD1ug5t_tEfyhYrmFkXBhlFssfyg",
         authDomain: "cifraprox-270126.firebaseapp.com",
         databaseURL: "https://cifraprox-270126-default-rtdb.firebaseio.com",
         projectId: "cifraprox-270126",
         storageBucket: "cifraprox-270126.firebasestorage.app",
         messagingSenderId: "901280078984",
-        appId: "1:901280078984:web:6b1354ce044279c18e933d"
+        appId: "1:901280078984:web:6b1354ce044279c18e933d",
+        databaseId: "cifraprox"
     },
     db: null,
     auth: null,
 
     init: async () => {
         try {
-            console.log('Iniciando app (Hybrid Mode: SQL Auth + Firebase DB)...');
+            console.log('Iniciando app (Serverless Mode)...');
 
             // Initialize Firebase
             if (!firebase.apps.length) {
                 firebase.initializeApp(app.firebaseConfig);
-                console.log("Firebase conectado:", app.firebaseConfig.projectId);
             }
 
-            // Connect to specific database 'cifraprox'
-            try {
-                app.db = firebase.firestore(firebase.app(), 'cifraprox');
-            } catch (e) {
-                console.warn('Named DB init failed, fallback to default:', e);
+            // --- CONEXÃO COM BANCO NOMEADO (CIFRAPROX) ---
+            // As instruções da sua IA eram para Realtime Database, mas adaptei para Firestore.
+            // Usamos o "Bridge" que criei no index.html para conectar na instância certa.
+
+            // 1. Aguardar carregamento do Bridge
+            let attempts = 0;
+            while (!window.connectToNamedDB && attempts < 20) {
+                await new Promise(r => setTimeout(r, 100)); // Espera 100ms
+                attempts++;
+            }
+
+            if (window.connectToNamedDB) {
+                try {
+                    // 2. Conectar na instância "cifraprox" (Secundária)
+                    // Isso cria uma conexão isolada direto com o banco certo.
+                    const namedDb = window.connectToNamedDB(app.firebaseConfig, 'cifraprox');
+
+                    // 3. Shim/Adaptador
+                    // O SDK Modular retorna um objeto diferente do Compat.
+                    // Mas para queries simples (collection, get), podemos fazer um "wrapper" simples 
+                    // ou forçar o uso dele se mudarmos o código.
+
+                    // SOLUÇÃO HÍBRIDA ROBUSTA:
+                    // O "namedDb" é Modular. O "app.db" espera Compat.
+                    // Infelizmente, misturar os dois exige reescrever as chamadas (doc().get() muda para getDoc(doc)).
+
+                    // TENTATIVA FINAL DE CONFIGURAÇÃO PURA (COMPAT):
+                    // Se o método acima for complexo demais para o código existente,
+                    // vamos tentar apenas 'firebase.firestore().settings(...)' se possível? Não.
+
+                    // VAMOS USAR O "SHIM" QUE FINGE SER O COMPAT:
+                    app.db = firebase.firestore(); // Começa com o default
+
+                    // Injetar o delegate (hack seguro para forçar o banco nomeado no objeto compat)
+                    // Injetar o delegate (hack seguro para forçar o banco nomeado no objeto compat)
+                    if (namedDb) {
+                        app.namedDb = namedDb; // Store for Hybrid usage
+                        console.log("%c [SUCESSO] Banco 'cifraprox' conectado e disponível em app.namedDb! ", "background: #059669; color: white; padding: 5px; font-weight: bold;");
+                    } else {
+                        console.warn("Bridge returned null DB.");
+                    }
+
+                } catch (e) {
+                    console.error("Erro ao conectar banco nomeado:", e);
+                    app.db = firebase.firestore(); // Fallback
+                }
+            } else {
+                console.error("Bridge não carregou. Usando banco default.");
                 app.db = firebase.firestore();
             }
+
             app.auth = firebase.auth();
+            console.log("App Inicializado.");
+            //     console.error("Critical Error in app.init:", e);
+            // }
+
+            // Final check for Auth (ensure it's set)
+            if (!app.auth) app.auth = firebase.auth();
+            console.log("%c Firebase inicializado - Projeto:", "background: #6366f1; color: white; padding: 4px;", app.firebaseConfig.projectId);
 
             // Initialize Theme
             const savedTheme = localStorage.getItem('theme') || 'light';
@@ -363,10 +415,13 @@ const app = {
     // register: async (e) => { ... } // Duplicate function removed
 
 
-    login: async () => {
-        const emailEl = document.getElementById('login-email');
-        const passEl = document.getElementById('login-password');
-        const btn = document.getElementById('btn-login');
+    login: async (e) => {
+        if (e) e.preventDefault();
+
+        const emailEl = document.getElementById('email');
+        const passEl = document.getElementById('password');
+        // Find button in the form
+        const btn = e && e.target ? e.target.querySelector('button[type="submit"]') : null;
 
         if (!emailEl || !passEl) return;
         const email = emailEl.value.trim();
@@ -377,40 +432,64 @@ const app = {
             return;
         }
 
-        btn.disabled = true;
-        btn.innerHTML = '<span class="material-icons-round animate-spin text-sm">refresh</span>';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="material-icons-round animate-spin text-sm">refresh</span> Entrando...';
+        }
 
         try {
             // 1. Firebase Auth
             const userCredential = await app.auth.signInWithEmailAndPassword(email, password);
             const uid = userCredential.user.uid;
 
-            // 2. Fetch User Profile from Firestore (Database 'cifraprox')
-            // Using the instance from app.db which should be initialized correctly
-            // If app.db is default, we might need to specify the db name if the user data is there.
-            // Based on migration, user data is in 'cifraprox'.
+            // 2. Fetch User Profile from Firestore
+            let userData;
+            let userRole = 'student';
 
-            // HACK: Re-initializing DB access specifically for this if needed, 
-            // but let's assume app.db needs to potentially target 'cifraprox' globally?
-            // For now, let's try standard access. If it fails, we know why.
-            // Actually, migration used 'cifraprox'. We should likely update app.init too.
-            // Let's assume for this step we just use app.db directly.
+            // HYBRID: Use Modular DB if available (cifraprox), else Compat
+            if (app.namedDb && window.firestoreUtils) {
+                console.log("%c [LOGIN] Usando Banco NOMEADO (Hybrid) ", "background: #059669; color: white; padding: 4px;");
+                const { doc, getDoc, setDoc, getFirestore } = window.firestoreUtils;
+                const userRef = doc(app.namedDb, 'users', uid);
+                const userSnap = await getDoc(userRef);
 
-            const doc = await app.db.collection('users').doc(uid).get();
-
-            if (!doc.exists) {
-                // Determine if 'cifraprox' db is required or if migration put it in default
-                // Migration put it in 'cifraprox'.
-                // If app.db points to default, this will fail.
-                // We will handle this in next step by updating init.
-                throw new Error('Perfil de usuário não encontrado no banco de dados.');
+                if (!userSnap.exists()) {
+                    console.warn('Perfil não encontrado (Named DB). Criando perfil automaticamente...');
+                    userData = {
+                        email: email,
+                        name: email.split('@')[0],
+                        role: email === 'cifraprox@gmail.com' ? 'admin' : 'student',
+                        plan_id: 1,
+                        createdAt: new Date().toISOString(), // Valid for both SDKs (string)
+                        status: 'active'
+                    };
+                    await setDoc(userRef, userData);
+                } else {
+                    userData = userSnap.data();
+                }
+            } else {
+                console.warn("%c [LOGIN] Fallback para Banco DEFAULT (Compat). app.namedDb é: ", "background: #f59e0b; color: black;", app.namedDb);
+                // Compat Fallback
+                const userDoc = await app.db.collection('users').doc(uid).get();
+                if (!userDoc.exists) {
+                    console.warn('Perfil não encontrado. Criando perfil automaticamente...');
+                    userData = {
+                        email: email,
+                        name: email.split('@')[0],
+                        role: email === 'cifraprox@gmail.com' ? 'admin' : 'student',
+                        plan_id: 1,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        status: 'active'
+                    };
+                    await app.db.collection('users').doc(uid).set(userData);
+                } else {
+                    userData = userDoc.data();
+                }
             }
-
-            const userData = doc.data();
 
             // 3. Update Session
             const user = {
-                id: uid, // Use Firebase UID as ID
+                id: uid,
                 email: userData.email,
                 role: userData.role || 'student',
                 plan_id: userData.plan_id || 1,
@@ -418,7 +497,7 @@ const app = {
             };
 
             app.state.user = user;
-            localStorage.setItem('token', 'firebase-session'); // Dummy token for compat
+            localStorage.setItem('token', 'firebase-session');
             localStorage.setItem('user', JSON.stringify(user));
 
             app.showToast(`Bem-vindo, ${user.name}!`);
@@ -435,9 +514,11 @@ const app = {
             else if (error.code === 'auth/user-not-found') msg = 'Usuário não encontrado.';
             else if (error.code === 'auth/invalid-email') msg = 'Email inválido.';
             app.showToast(msg);
-        } finally {
-            btn.disabled = false;
-            btn.innerText = 'Entrar';
+
+            if (btn) {
+                btn.disabled = false;
+                btn.innerText = 'Entrar na conta';
+            }
         }
     },
 
@@ -662,36 +743,51 @@ const app = {
             title: form.title.value,
             artist: form.artist.value,
             content: form.content.value,
-            tabs: form.tabs.value,
-            tone: form.tom.value,
-            capo: form.capo.value,
-            genre: form.genre.value,
-            bpm: form.bpm.value,
-            youtube: form.youtube.value,
-            youtubeTraining: form.youtubeTraining.value,
-            ready: form.ready.checked
+            tabs: form.tabs.value || '',
+            tone: form.tom.value || '',
+            capo: form.capo.value || '',
+            genre: form.genre.value || '',
+            bpm: form.bpm.value || '',
+            youtube: form.youtube.value || '',
+            youtubeTraining: form.youtubeTraining.value || '',
+            ready: form.ready.checked,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
 
         try {
-            const url = id ? `${app.API_URL}/cifras/${id}` : `${app.API_URL}/cifras`;
-            const method = id ? 'PUT' : 'POST';
+            // HYBRID: Use Modular DB if available
+            if (app.namedDb && window.firestoreUtils) {
+                const { doc, addDoc, updateDoc, collection } = window.firestoreUtils;
+                console.log("%c [SAVE] Usando Banco NOMEADO (Hybrid)", "background: #059669; color: white;");
 
-            const res = await fetch(url, {
-                method: method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': localStorage.getItem('token')
-                },
-                body: JSON.stringify(payload)
-            });
+                payload.updatedAt = new Date().toISOString(); // Simple timestamp
 
-            if (!res.ok) throw new Error('Erro ao salvar.');
+                if (id) {
+                    // UPDATE
+                    const docRef = doc(app.namedDb, 'cifras', id);
+                    await updateDoc(docRef, payload);
+                } else {
+                    // CREATE
+                    payload.createdAt = new Date().toISOString();
+                    const colRef = collection(app.namedDb, 'cifras');
+                    await addDoc(colRef, payload);
+                }
+            } else {
+                console.warn("%c [SAVE] Fallback para DEFAULT", "background: #f59e0b; color: black;");
+                // Compat Fallback
+                if (id) {
+                    await app.db.collection('cifras').doc(id).update(payload);
+                } else {
+                    payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+                    await app.db.collection('cifras').add(payload);
+                }
+            }
 
-            alert('Cifra salva com sucesso!');
+            app.showToast('Cifra salva no Firestore!');
             app.navigate('home');
         } catch (error) {
             console.error(error);
-            alert('Erro ao salvar cifra.');
+            alert('Erro ao salvar cifra: ' + error.message);
         }
     },
 
@@ -702,109 +798,86 @@ const app = {
 
 
     // --- ADMIN MODULE ---
-    loadAdminUsers: async () => {
-        const list = document.getElementById('admin-users-list');
-        if (!list) return;
-
-        list.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center">Carregando...</td></tr>';
-
-        try {
-            const res = await fetch(`${app.API_URL}/admin/users`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
     loadAdminUsers: () => {
-                    const area = document.getElementById('admin-users-list');
-                    const countTotal = document.getElementById('stat-total-users');
-                    const countActive = document.getElementById('stat-active-users');
-                    const countSuspended = document.getElementById('stat-suspended-users');
+        const area = document.getElementById('admin-users-list');
+        const countTotal = document.getElementById('stat-total-users');
+        const countActive = document.getElementById('stat-active-users');
+        const countSuspended = document.getElementById('stat-suspended-users');
 
-                    if (!area) return;
+        if (!area) return;
 
-                    area.innerHTML = '<tr><td colspan="6" class="p-4 text-center">Carregando Firebase...</td></tr>';
+        area.innerHTML = '<tr><td colspan="6" class="p-4 text-center">Carregando Firebase...</td></tr>';
 
-                    // Firestore Listener
-                    app.db.collection('users').onSnapshot(snap => {
-                        const users = [];
-                        snap.forEach(doc => users.push({ id: doc.id, ...doc.data() }));
+        // Firestore Listener (Hybrid)
+        console.log('DEBUG: loadAdminUsers - Connecting to Firestore...');
 
-                        // Update Counts
-                        if (countTotal) countTotal.innerText = users.length;
-                        if (countActive) countActive.innerText = users.filter(u => u.status === 'active').length;
-                        if (countSuspended) countSuspended.innerText = users.filter(u => u.status !== 'active').length;
+        const renderUsers = (snap) => {
+            console.log(`DEBUG: Snapshot received. Docs: ${snap.size}`);
+            const users = [];
+            snap.forEach(doc => {
+                const d = doc.data();
+                users.push({ id: doc.id, ...d });
+            });
 
-                        area.innerHTML = '';
+            // Update Counts
+            if (countTotal) countTotal.innerText = users.length;
+            if (countActive) countActive.innerText = users.filter(u => u.status === 'active').length;
+            if (countSuspended) countSuspended.innerText = users.filter(u => u.status !== 'active').length;
 
-                        // Plan Map (Hardcoded for Migration Speed)
-                        const planMap = {
-                            1: 'Aluno (Grátis)',
-                            4: 'Escola Básico',
-                            5: 'Professor Start (Max: 8)',
-                            6: 'Professor Pro (Max: 15)',
-                            7: 'Professor Elite (Max: 25)'
-                        };
+            area.innerHTML = '';
 
-                        users.forEach(u => {
-                            const tr = document.createElement('tr');
-                            tr.className = 'border-b border-slate-100 hover:bg-slate-50 transition-colors';
+            // Plan Map
+            const planMap = { 1: 'Aluno (Grátis)', 4: 'Escola Básico', 5: 'Professor Start', 6: 'Professor Pro', 7: 'Professor Elite' };
 
-                            const planName = planMap[u.plan_id] || 'Desconhecido';
+            users.forEach(u => {
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-slate-100 hover:bg-slate-50 transition-colors';
+                const planName = planMap[u.plan_id] || 'Desconhecido';
 
-                            tr.innerHTML = `
+                tr.innerHTML = `
+                    <td class="p-4"><div class="font-bold text-slate-700">${u.name || 'Sem nome'}</div><div class="text-xs text-slate-400">${u.email}</div></td>
+                    <td class="p-4"><div class="text-xs text-slate-500"><span class="font-bold text-slate-700">♪ ${u.instrument || '-'}</span><br>${u.phone || '-'}</div></td>
                     <td class="p-4">
-                        <div class="font-bold text-slate-700">${u.name || 'Sem nome'}</div>
-                        <div class="text-xs text-slate-400">${u.email}</div>
+                        <span class="px-2 py-1 rounded text-xs font-bold uppercase ${u.role === 'admin' ? 'bg-purple-100 text-purple-700' : (u.role === 'professor' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600')}">${u.role}</span>
                     </td>
-                    <td class="p-4">
-                        <div class="text-xs text-slate-500">
-                            <span class="font-bold text-slate-700">♪ ${u.instrument || '-'}</span><br>
-                            ${u.phone || '00000000'}
-                        </div>
-                    </td>
-                    <td class="p-4">
-                        <span class="px-2 py-1 rounded text-xs font-bold uppercase ${u.role === 'admin' ? 'bg-purple-100 text-purple-700' : (u.role === 'professor' ? 'bg-blue-100 text-blue-700' : (u.role === 'school' ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-600'))}">
-                            ${u.role}
-                        </span>
-                    </td>
-                    <td class="p-4">
-                        <div class="text-xs font-medium text-slate-600">${planName}</div>
-                        <div class="text-[10px] text-slate-400">CPF: ${u.cpf || '-'}</div>
-                    </td>
-                    <td class="p-4">
-                        <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${u.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
-                            <span class="w-1.5 h-1.5 rounded-full ${u.status === 'active' ? 'bg-green-500' : 'bg-red-500'}"></span>
-                            ${u.status === 'active' ? 'Ativo' : 'Suspenso'}
-                        </span>
-                    </td>
-                    <td class="p-4 text-right">
-                        <button onclick="app.editUser('${u.id}')" class="text-slate-400 hover:text-primary font-bold text-xs uppercase tracking-wide transition-colors">
-                            Gerenciar
-                        </button>
-                        <button onclick="app.deleteUser('${u.id}')" class="ml-2 text-red-300 hover:text-red-500 transition-colors">
-                            <span class="material-icons-round text-sm">delete</span>
-                        </button>
+                    <td class="p-4"><div class="text-xs font-medium text-slate-600">${planName}</div></td>
+                    <td class="p-4"><span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${u.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">${u.status === 'active' ? 'Ativo' : 'Suspenso'}</span></td>
+                    <td class="p-4 text-center">
+                        <button onclick="app.editUser('${u.id}')" class="text-slate-400 hover:text-blue-600"><span class="material-icons-round text-lg">edit</span></button>
                     </td>
                 `;
-                            area.appendChild(tr);
-                        });
-                    }, err => {
-                        console.error(err);
-                        area.innerHTML = '<tr><td colspan="6" class="text-red-500 p-4 text-center">Erro ao carregar do Firestore.</td></tr>';
-                    });
-                },
+                area.appendChild(tr);
+            });
+        };
 
-                modalAddUser: async () => {
-                    // Fetch plans first
-                    let plans = [];
-                    try {
-                        const res = await fetch(`${app.API_URL}/admin/plans`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
-                        plans = await res.json();
-                    } catch (e) {
-                        console.error('Erro ao buscar planos', e);
-                        plans = [{ id: null, name: 'Erro ao carregar planos' }];
-                    }
+        const onError = (err) => {
+            console.error(err);
+            area.innerHTML = '<tr><td colspan="6" class="text-red-500 p-4 text-center">Erro ao carregar do Firestore.</td></tr>';
+        };
 
-                    const planOptions = plans.map(p => `<option value="${p.id}">${p.name} - R$ ${p.price}</option>`).join('');
+        if (app.namedDb && window.firestoreUtils) {
+            const { collection, onSnapshot, getFirestore } = window.firestoreUtils;
+            console.log("%c [ADMIN] Usando Banco NOMEADO (Hybrid)", "background: #059669; color: white;");
+            onSnapshot(collection(app.namedDb, 'users'), renderUsers, onError);
+        } else {
+            console.warn("%c [ADMIN] Fallback para DEFAULT", "background: #f59e0b; color: black;");
+            app.db.collection('users').onSnapshot(renderUsers, onError); // Compat takes function directly for next/error
+        }
+    },
 
-                    const content = `
+    modalAddUser: async () => {
+        // Hardcoded Plans (Serverless Mode)
+        const plans = [
+            { id: 1, name: 'Aluno (Grátis)', price: '0,00' },
+            { id: 4, name: 'Escola Básico', price: '99,00' },
+            { id: 5, name: 'Professor Start', price: '49,90' },
+            { id: 6, name: 'Professor Pro', price: '79,90' },
+            { id: 7, name: 'Professor Elite', price: '129,90' }
+        ];
+
+        const planOptions = plans.map(p => `<option value="${p.id}">${p.name} - R$ ${p.price}</option>`).join('');
+
+        const content = `
             <div class="space-y-4 text-left">
                 <div>
                     <label class="block text-sm font-bold mb-1">E-mail</label>
@@ -827,7 +900,7 @@ const app = {
                     <div>
                         <label class="block text-sm font-bold mb-1">Plano</label>
                         <select id="new-user-plan" class="w-full rounded border-slate-300 p-2">
-                            <option value="">Sem Plano</option>
+                            <option value="1">Sem Plano</option>
                             ${planOptions}
                         </select>
                     </div>
@@ -835,76 +908,101 @@ const app = {
             </div>
         `;
 
-                    await app.modal({
-                        title: 'Novo Usuário',
-                        content: content,
-                        confirmText: 'Criar Usuário',
-                        onConfirm: async () => {
-                            const email = document.getElementById('new-user-email').value;
-                            const password = document.getElementById('new-user-pass').value;
-                            const role = document.getElementById('new-user-role').value;
-                            const plan_id = document.getElementById('new-user-plan').value || null;
+        await app.modal({
+            title: 'Novo Usuário',
+            content: content,
+            confirmText: 'Criar Usuário',
+            onConfirm: async () => {
+                const email = document.getElementById('new-user-email').value;
+                const password = document.getElementById('new-user-pass').value;
+                const role = document.getElementById('new-user-role').value;
+                const plan_id = document.getElementById('new-user-plan').value || 1;
 
-                            if (!email || !password) return alert('E-mail e senha são obrigatórios.');
+                if (!email || !password) return alert('E-mail e senha são obrigatórios.');
 
-                            try {
-                                const res = await fetch(`${app.API_URL}/admin/users`, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                                    body: JSON.stringify({ email, password, role, plan_id, status: 'active' })
-                                });
-                                if (!res.ok) throw new Error('Erro ao criar');
-                                app.showToast('Usuário criado!');
-                                app.loadAdminUsers();
-                            } catch (e) {
-                                alert('Falha ao criar usuário. Verifique se o e-mail já existe.');
-                            }
-                        }
-                    });
-                },
+                try {
+                    if (app.namedDb && window.firestoreUtils) {
+                        // HYBRID CREATION (Secondary App to avoid logout)
+                        const { initializeApp, getAuth, createUserWithEmailAndPassword, doc, setDoc } = window.firestoreUtils;
 
-                editUser: async (id) => {
-                    // debug
-                    console.log('Editando usuário ID:', id);
+                        // Create Request-Scoped App for Auth Separation
+                        const tempAppName = 'temp-create-user-' + Date.now();
+                        const tempApp = initializeApp(app.firebaseConfig, tempAppName);
+                        const tempAuth = getAuth(tempApp);
 
-                    try {
-                        // 1. Buscando dados em paralelo
-                        const [usersRes, plansRes] = await Promise.all([
-                            fetch(`${app.API_URL}/admin/users`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }),
-                            fetch(`${app.API_URL}/admin/plans`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } })
-                        ]);
+                        const cred = await createUserWithEmailAndPassword(tempAuth, email, password);
+                        const uid = cred.user.uid;
 
-                        if (!usersRes.ok) {
-                            const errText = await usersRes.text();
-                            throw new Error(`Erro API Usuários (${usersRes.status}): ${errText}`);
-                        }
-                        if (!plansRes.ok) {
-                            const errText = await plansRes.text();
-                            throw new Error(`Erro API Planos (${plansRes.status}): ${errText}`);
-                        }
+                        // Write to Named DB
+                        await setDoc(doc(app.namedDb, 'users', uid), {
+                            email,
+                            role,
+                            plan_id: parseInt(plan_id),
+                            name: email.split('@')[0],
+                            status: 'active',
+                            createdAt: new Date().toISOString()
+                        });
 
-                        const users = await usersRes.json();
-                        const plans = await plansRes.json();
+                        // Cleanup (if deleteApp exists, but letting it GC is fine too for now)
+                        console.log("Usuário criado no Named DB:", uid);
 
-                        // Log para debug
-                        console.log('Users carregados:', users.length);
-                        console.log('Planos carregados:', plans.length);
+                    } else {
+                        // Fallback (Will likely logout admin or fail if simple fetch used)
+                        throw new Error("Modo Híbrido necessário para criar usuários Admin.");
+                    }
 
-                        // Encontrar usuário (convertendo ID para string/int para garantir match)
-                        const user = users.find(u => u.id == id);
+                    app.showToast('Usuário criado!');
+                    // Listener will auto-update list
+                } catch (e) {
+                    console.error(e);
+                    alert('Erro ao criar usuário: ' + e.message);
+                }
+            }
+        });
+    },
 
-                        if (!user) {
-                            console.error('Usuário não encontrado. ID buscado:', id, 'IDs disponíveis:', users.map(u => u.id));
-                            return alert('Erro: Usuário não encontrado na lista local.');
-                        }
+    editUser: async (id) => {
+        // debug
+        console.log('Editando usuário ID:', id);
 
-                        if (!Array.isArray(plans)) throw new Error('API retornou lista de planos inválida');
+        try {
+            // 1. Buscando dados em paralelo
+            const [usersRes, plansRes] = await Promise.all([
+                fetch(`${app.API_URL}/admin/users`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }),
+                fetch(`${app.API_URL}/admin/plans`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } })
+            ]);
 
-                        const planOptions = plans.map(p => `
+            if (!usersRes.ok) {
+                const errText = await usersRes.text();
+                throw new Error(`Erro API Usuários (${usersRes.status}): ${errText}`);
+            }
+            if (!plansRes.ok) {
+                const errText = await plansRes.text();
+                throw new Error(`Erro API Planos (${plansRes.status}): ${errText}`);
+            }
+
+            const users = await usersRes.json();
+            const plans = await plansRes.json();
+
+            // Log para debug
+            console.log('Users carregados:', users.length);
+            console.log('Planos carregados:', plans.length);
+
+            // Encontrar usuário (convertendo ID para string/int para garantir match)
+            const user = users.find(u => u.id == id);
+
+            if (!user) {
+                console.error('Usuário não encontrado. ID buscado:', id, 'IDs disponíveis:', users.map(u => u.id));
+                return alert('Erro: Usuário não encontrado na lista local.');
+            }
+
+            if (!Array.isArray(plans)) throw new Error('API retornou lista de planos inválida');
+
+            const planOptions = plans.map(p => `
                 <option value="${p.id}" ${user.plan_id === p.id ? 'selected' : ''}>${p.name} (Max: ${p.max_connections})</option>
             `).join('');
 
-                        const content = `
+            const content = `
                 <div class="space-y-4 text-left">
                      <p class="text-sm text-slate-500">Editando: <b>${user.email}</b></p>
                      
@@ -937,86 +1035,107 @@ const app = {
                 </div>
             `;
 
-                        await app.modal({
-                            title: 'Gerenciar Licença',
-                            content: content,
-                            confirmText: 'Salvar Alterações',
-                            onShow: () => {
-                                const planSelect = document.getElementById('edit-user-plan');
-                                const roleSelect = document.getElementById('edit-user-role');
+            await app.modal({
+                title: 'Gerenciar Licença',
+                content: content,
+                confirmText: 'Salvar Alterações',
+                onShow: () => {
+                    const planSelect = document.getElementById('edit-user-plan');
+                    const roleSelect = document.getElementById('edit-user-role');
 
-                                if (planSelect && roleSelect) {
-                                    planSelect.addEventListener('change', () => {
-                                        const pid = parseInt(planSelect.value);
-                                        // Auto-set role based on known Plan IDs
-                                        if (pid === 4) roleSelect.value = 'school';
-                                        else if ([5, 6, 7].includes(pid)) roleSelect.value = 'professor';
-                                        else if (pid === 1) roleSelect.value = 'student';
-                                    });
-                                }
-                            },
-                            onConfirm: async () => {
-                                const status = document.getElementById('edit-user-status').value;
-                                const role = document.getElementById('edit-user-role').value;
-                                const plan_id = document.getElementById('edit-user-plan').value || null;
-
-                                try {
-                                    await app.db.collection('users').doc(id).update({
-                                        status,
-                                        role,
-                                        plan_id: parseInt(plan_id)
-                                    });
-
-                                    app.showToast('Usuário atualizado!');
-                                    // No need to reload, onSnapshot handles it
-                                } catch (e) {
-                                    console.error(e);
-                                    alert('Erro ao atualizar: ' + e.message);
-                                }
-                            }
+                    if (planSelect && roleSelect) {
+                        planSelect.addEventListener('change', () => {
+                            const pid = parseInt(planSelect.value);
+                            // Auto-set role based on known Plan IDs
+                            if (pid === 4) roleSelect.value = 'school';
+                            else if ([5, 6, 7].includes(pid)) roleSelect.value = 'professor';
+                            else if (pid === 1) roleSelect.value = 'student';
                         });
-
-                    } catch (e) {
-                        console.error('Erro no fluxo de edição:', e);
-                        alert(`Erro ao abrir edição:\n${e.message}`);
                     }
                 },
-
-                deleteUser: async (id) => {
-                    const confirmDelete = confirm('Tem certeza que deseja EXCLUIR este usuário? Esta ação não pode ser desfeita.');
-                    if (!confirmDelete) return;
+                onConfirm: async () => {
+                    const status = document.getElementById('edit-user-status').value;
+                    const role = document.getElementById('edit-user-role').value;
+                    const plan_id = document.getElementById('edit-user-plan').value || null;
 
                     try {
-                        await app.db.collection('users').doc(id).delete();
-                        app.showToast('Usuário excluído.');
+                        await app.db.collection('users').doc(id).update({
+                            status,
+                            role,
+                            plan_id: parseInt(plan_id)
+                        });
+
+                        app.showToast('Usuário atualizado!');
+                        // No need to reload, onSnapshot handles it
                     } catch (e) {
                         console.error(e);
-                        alert('Erro ao excluir: ' + e.message);
+                        alert('Erro ao atualizar: ' + e.message);
                     }
-                },
+                }
+            });
 
-                // --- CLASSROOM MODULE ---
-                // --- CLASSROOM MODULE ---
+        } catch (e) {
+            console.error('Erro no fluxo de edição:', e);
+            alert(`Erro ao abrir edição:\n${e.message}`);
+        }
+    },
 
-                // Professor: Criar Sala
-                startClassroom: async () => {
-                    try {
-                        const btn = document.getElementById('btn-start-class');
-                        if (btn) btn.disabled = true;
+    deleteUser: async (id) => {
+        const confirmDelete = confirm('Tem certeza que deseja EXCLUIR este usuário? Esta ação não pode ser desfeita.');
+        if (!confirmDelete) return;
 
-                        const res = await fetch(`${app.API_URL}/classrooms`, {
-                            method: 'POST',
-                            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-                        });
+        try {
+            await app.db.collection('users').doc(id).delete();
+            app.showToast('Usuário excluído.');
+        } catch (e) {
+            console.error(e);
+            alert('Erro ao excluir: ' + e.message);
+        }
+    },
 
-                        if (!res.ok) throw new Error('Falha ao criar sala. Verifique seu plano.');
+    deleteCifra: async (id) => {
+        if (!confirm('Tem certeza que deseja apagar?')) return;
 
-                        const session = await res.json();
+        try {
+            if (app.namedDb && window.firestoreUtils) {
+                const { doc, deleteDoc } = window.firestoreUtils;
+                const docRef = doc(app.namedDb, 'cifras', id);
+                await deleteDoc(docRef);
+            } else {
+                await app.db.collection('cifras').doc(id).delete();
+            }
 
-                        // Mostrar modal com o código
-                        await app.modal({
-                            title: 'Aula Iniciada! 🔴',
-                            content: `
+            app.showToast('Cifra removida.');
+            // Filter handles removal from state via snapshot listener usually, but navigate updates view
+            if (location.hash.includes('editor')) app.navigate('home');
+        } catch (e) {
+            console.error(e);
+            alert('Erro ao apagar.');
+        }
+    },
+
+    // --- CLASSROOM MODULE ---
+    // --- CLASSROOM MODULE ---
+
+    // Professor: Criar Sala
+    startClassroom: async () => {
+        try {
+            const btn = document.getElementById('btn-start-class');
+            if (btn) btn.disabled = true;
+
+            const res = await fetch(`${app.API_URL}/classrooms`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+
+            if (!res.ok) throw new Error('Falha ao criar sala. Verifique seu plano.');
+
+            const session = await res.json();
+
+            // Mostrar modal com o código
+            await app.modal({
+                title: 'Aula Iniciada! 🔴',
+                content: `
                     <div class="text-center space-y-4">
                         <p>Compartilhe este código com seus alunos:</p>
                         <div class="text-4xl font-mono font-bold text-primary tracking-widest bg-slate-100 dark:bg-slate-800 p-4 rounded-xl border border-dashed border-primary select-all">
@@ -1026,136 +1145,162 @@ const app = {
                         <p class="text-xs text-slate-400">Esta sala expira em 60 minutos.</p>
                     </div>
                 `,
-                            confirmText: 'Entendi'
-                        });
+                confirmText: 'Entendi'
+            });
 
-                    } catch (e) {
-                        alert(e.message);
-                    } finally {
-                        const btn = document.getElementById('btn-start-class');
-                        if (btn) btn.disabled = false;
-                    }
-                },
+        } catch (e) {
+            alert(e.message);
+        } finally {
+            const btn = document.getElementById('btn-start-class');
+            if (btn) btn.disabled = false;
+        }
+    },
 
-                // Aluno: Entrar na Sala
-                joinClassroom: async () => {
-                    const codeInput = document.getElementById('classroom-code-input');
-                    const code = codeInput.value.trim().toUpperCase();
-                    if (!code) return alert('Digite o código');
+    // Aluno: Entrar na Sala
+    joinClassroom: async () => {
+        const codeInput = document.getElementById('classroom-code-input');
+        const code = codeInput.value.trim().toUpperCase();
+        if (!code) return alert('Digite o código');
 
-                    const btn = document.querySelector('#classroom-join-area button');
-                    const originalText = btn.innerText;
-                    btn.innerText = 'Verificando...';
-                    btn.disabled = true;
+        const btn = document.querySelector('#classroom-join-area button');
+        const originalText = btn.innerText;
+        btn.innerText = 'Verificando...';
+        btn.disabled = true;
 
-                    try {
-                        // 1. Tentar entrar (Join)
-                        const res = await fetch(`${app.API_URL}/classrooms/${code}/join`, { method: 'POST' });
-                        const data = await res.json();
+        try {
+            // 1. Tentar entrar (Join)
+            const res = await fetch(`${app.API_URL}/classrooms/${code}/join`, { method: 'POST' });
+            const data = await res.json();
 
-                        if (!res.ok) {
-                            // Tratamento especial para Sala Cheia (429) ou Expirada (400/404)
-                            throw new Error(data.message || 'Erro ao entrar na sala');
-                        }
+            if (!res.ok) {
+                // Tratamento especial para Sala Cheia (429) ou Expirada (400/404)
+                throw new Error(data.message || 'Erro ao entrar na sala');
+            }
 
-                        // Sucesso!
-                        document.getElementById('classroom-join-area').classList.add('hidden');
-                        document.getElementById('classroom-active-area').classList.remove('hidden');
+            // Sucesso!
+            document.getElementById('classroom-join-area').classList.add('hidden');
+            document.getElementById('classroom-active-area').classList.remove('hidden');
 
-                        // Timer visual apenas
-                        let minutes = 59;
-                        let seconds = 59;
-                        setInterval(() => {
-                            seconds--;
-                            if (seconds < 0) { seconds = 59; minutes--; }
-                            const timerEl = document.getElementById('classroom-timer');
-                            if (timerEl) timerEl.innerText = `${minutes}:${seconds < 10 ? '0' + seconds : seconds}`;
-                        }, 1000);
+            // Timer visual apenas
+            let minutes = 59;
+            let seconds = 59;
+            setInterval(() => {
+                seconds--;
+                if (seconds < 0) { seconds = 59; minutes--; }
+                const timerEl = document.getElementById('classroom-timer');
+                if (timerEl) timerEl.innerText = `${minutes}:${seconds < 10 ? '0' + seconds : seconds}`;
+            }, 1000);
 
-                    } catch (e) {
-                        app.modal({
-                            title: 'Acesso Negado 🚫',
-                            content: `<p class="text-center text-lg">${e.message}</p>`,
-                            confirmText: 'OK'
-                        });
-                    } finally {
-                        btn.innerText = originalText;
-                        btn.disabled = false;
-                    }
-                },
+        } catch (e) {
+            app.modal({
+                title: 'Acesso Negado 🚫',
+                content: `<p class="text-center text-lg">${e.message}</p>`,
+                confirmText: 'OK'
+            });
+        } finally {
+            btn.innerText = originalText;
+            btn.disabled = false;
+        }
+    },
 
-                // --- FIRESTORE OPERATIONS ---
+    // --- FIRESTORE OPERATIONS ---
 
-                loadCifras: async () => {
-                    const list = document.getElementById('cifra-list');
-                    if (!list) return;
+    loadCifras: async () => {
+        const list = document.getElementById('cifra-list');
+        if (!list) return;
 
-                    // Limpar listener anterior se existir
-                    if (app.state.unsubs.cifras) {
-                        app.state.unsubs.cifras();
-                    }
+        // Limpar listener anterior se existir
+        if (app.state.unsubs.cifras) {
+            app.state.unsubs.cifras();
+        }
 
-                    list.innerHTML = '<p style="color:var(--text-muted)">Sincronizando com Firestore...</p>';
+        list.innerHTML = '<p style="color:var(--text-muted)">Sincronizando com Firestore...</p>';
 
-                    try {
-                        // Listener em Tempo Real (Firestore)
-                        // Ordenação: Firestore requer índice para algumas ordens, mas updatedAt é comum
-                        const onSnapshot = (snapshot) => {
-                            const cifras = [];
-                            snapshot.forEach(doc => {
-                                cifras.push({ id: doc.id, ...doc.data() });
-                            });
+        // DEBUG: Verificar qual banco está sendo usado
+        console.log('%c [FIRESTORE DEBUG] Iniciando loadCifras...', 'background: #2563eb; color: white; padding: 4px; font-weight: bold;');
 
-                            // Sort in memory to avoid index requirement initially or usage complexity
-                            cifras.sort((a, b) => {
-                                // Handle Timestamp objects if they come from startAfter/etc, but here simple sort
-                                const ta = a.updatedAt ? (a.updatedAt.seconds || 0) : 0;
-                                const tb = b.updatedAt ? (b.updatedAt.seconds || 0) : 0;
-                                // Fallback to simple number if it was migrated from RTDB as millis
-                                const valA = typeof a.updatedAt === 'number' ? a.updatedAt : ta;
-                                const valB = typeof b.updatedAt === 'number' ? b.updatedAt : tb;
-                                return valB - valA;
-                            });
+        // Tentar obter informações do banco conectado
+        if (app.db._delegate && app.db._delegate._databaseId) {
+            console.log('%c [BANCO CONECTADO]', 'background: #10b981; color: white; padding: 4px; font-weight: bold;', app.db._delegate._databaseId.database);
+        } else if (app.db._databaseId) {
+            console.log('%c [BANCO CONECTADO]', 'background: #10b981; color: white; padding: 4px; font-weight: bold;', app.db._databaseId.database);
+        }
 
-                            app.state.cifras = cifras;
-                            app.filterCifras();
-                        };
+        try {
+            // Listener em Tempo Real (Firestore)
+            // Ordenação: Firestore requer índice para algumas ordens, mas updatedAt é comum
+            const onSnapshotCallback = (snapshot) => {
+                console.log(`%c [SNAPSHOT RECEBIDO] Documentos encontrados: ${snapshot.size}`, 'background: #10b981; color: white; padding: 4px; font-weight: bold;');
 
-                        const unsub = app.db.collection('cifras').onSnapshot(onSnapshot, (error) => {
-                            console.error("Firestore Listen Error:", error);
-                            list.innerHTML = `<p style="color:red">Erro: ${error.message}</p>`;
-                        });
+                const cifras = [];
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    console.log(`%c [DOC] ${doc.id}:`, 'color: #3b82f6; font-weight: bold;', data.title, '|', data.artist);
+                    cifras.push({ id: doc.id, ...data });
+                });
 
-                        app.state.unsubs.cifras = unsub;
+                // Sort in memory to avoid index requirement initially or usage complexity
+                cifras.sort((a, b) => {
+                    // Handle Timestamp objects if they come from startAfter/etc, but here simple sort
+                    const ta = a.updatedAt ? (a.updatedAt.seconds || 0) : 0;
+                    const tb = b.updatedAt ? (b.updatedAt.seconds || 0) : 0;
+                    // Fallback to simple number if it was migrated from RTDB as millis
+                    const valA = typeof a.updatedAt === 'number' ? a.updatedAt : ta;
+                    const valB = typeof b.updatedAt === 'number' ? b.updatedAt : tb;
+                    return valB - valA;
+                });
 
-                    } catch (e) {
-                        console.error('Erro ao configurar listener:', e);
-                        list.innerHTML = '<p style="color:red">Erro ao conectar.</p>';
-                    }
-                },
+                app.state.cifras = cifras;
+                app.filterCifras();
+            };
 
-                filterCifras: () => {
-                    const list = document.getElementById('cifra-list');
-                    if (!list) return;
+            let unsub;
+            if (app.namedDb && window.firestoreUtils) {
+                const { collection, onSnapshot, getFirestore } = window.firestoreUtils;
+                console.log("%c [LOAD] Usando Banco NOMEADO (Hybrid)", "background: #059669; color: white;");
+                const colRef = collection(app.namedDb, 'cifras');
+                unsub = onSnapshot(colRef, onSnapshotCallback, (error) => {
+                    console.error("Firestore Listen Error:", error);
+                    list.innerHTML = `<p style="color:red">Erro: ${error.message}</p>`;
+                });
+            } else {
+                console.warn("%c [LOAD] Fallback para DEFAULT", "background: #f59e0b; color: black;");
+                unsub = app.db.collection('cifras').onSnapshot(onSnapshotCallback, (error) => {
+                    console.error("Firestore Listen Error:", error);
+                    list.innerHTML = `<p style="color:red">Erro: ${error.message}</p>`;
+                });
+            }
 
-                    list.innerHTML = '';
+            app.state.unsubs.cifras = unsub;
 
-                    let filtered = app.state.cifras;
+        } catch (e) {
+            console.error('Erro ao configurar listener:', e);
+            list.innerHTML = '<p style="color:red">Erro ao conectar.</p>';
+        }
+    },
 
-                    // Se houver termo de busca (opcional, se quiser implementar busca local)
-                    // const term = ...
+    filterCifras: () => {
+        const list = document.getElementById('cifra-list');
+        if (!list) return;
 
-                    if (filtered.length === 0) {
-                        list.innerHTML = `<div class="col-span-full text-center py-10 text-slate-500">Nenhuma cifra encontrada.</div>`;
-                        return;
-                    }
+        list.innerHTML = '';
 
-                    filtered.forEach(cifra => {
-                        const card = document.createElement('div');
-                        card.className = 'group bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-5 rounded-3xl shadow-sm hover:shadow-xl hover:border-primary/50 transition-all cursor-pointer';
-                        card.onclick = () => app.navigate('cifra', cifra.id);
+        let filtered = app.state.cifras;
 
-                        card.innerHTML = `
+        // Se houver termo de busca (opcional, se quiser implementar busca local)
+        // const term = ...
+
+        if (filtered.length === 0) {
+            list.innerHTML = `<div class="col-span-full text-center py-10 text-slate-500">Nenhuma cifra encontrada.</div>`;
+            return;
+        }
+
+        filtered.forEach(cifra => {
+            const card = document.createElement('div');
+            card.className = 'group bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-5 rounded-3xl shadow-sm hover:shadow-xl hover:border-primary/50 transition-all cursor-pointer';
+            card.onclick = () => app.navigate('cifra', cifra.id);
+
+            card.innerHTML = `
                 <div class="flex justify-between items-start mb-4">
                     <div class="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition-colors">
                         <span class="material-icons-round text-3xl">music_note</span>
@@ -1174,29 +1319,32 @@ const app = {
                     <span class="bg-slate-100 dark:bg-slate-700/50 px-2 py-1 rounded-md text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase">${cifra.tone || '?'}</span>
                 </div>
             `;
-                        list.appendChild(card);
-                    });
-                },
+            list.appendChild(card);
+        });
+    },
 
-                showToast: (message) => {
-                    const toast = document.createElement('div');
-                    toast.innerText = message;
-                    toast.style.cssText = 'position:fixed; bottom: 100px; right: 2rem; background: var(--bg-header); color: white; padding: 0.5rem 1rem; border-radius: 20px; font-size: 0.9rem; z-index: 2100; box-shadow: 0 4px 6px rgba(0,0,0,0.1); opacity: 0; transition: opacity 0.3s; pointer-events:none;';
-                    document.body.appendChild(toast);
-                    requestAnimationFrame(() => toast.style.opacity = '1');
-                    setTimeout(() => {
-                        toast.style.opacity = '0';
-                        setTimeout(() => toast.remove(), 300);
-                    }, 3000);
-                },
+    showToast: (message) => {
+        const toast = document.createElement('div');
+        toast.innerText = message;
+        toast.style.cssText = 'position:fixed; bottom: 100px; right: 2rem; background: #1e293b; color: white; padding: 0.75rem 1.5rem; border-radius: 12px; font-size: 0.9em; font-weight: 600; z-index: 9999; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); opacity: 0; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); pointer-events:none; transform: translateY(10px); border: 1px solid rgba(255,255,255,0.1);';
+        document.body.appendChild(toast);
+        requestAnimationFrame(() => {
+            toast.style.opacity = '1';
+            toast.style.transform = 'translateY(0)';
+        });
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    },
 
-                // --- MODAL SYSTEM (Premium Dialogs) ---
-                modal: ({ title, content, input = false, confirmText = 'OK', cancelText = 'Cancelar', placeholder = '', onConfirm = null, onShow = null }) => {
-                    return new Promise((resolve) => {
-                        const root = document.getElementById('modal-root');
-                        const id = 'modal-' + Date.now();
+    // --- MODAL SYSTEM (Premium Dialogs) ---
+    modal: ({ title, content, input = false, confirmText = 'OK', cancelText = 'Cancelar', placeholder = '', onConfirm = null, onShow = null }) => {
+        return new Promise((resolve) => {
+            const root = document.getElementById('modal-root');
+            const id = 'modal-' + Date.now();
 
-                        const html = `
+            const html = `
                 <div class="modal-overlay" id="${id}">
                     <div class="modal-container">
                         <div class="modal-title">${title}</div>
@@ -1210,559 +1358,487 @@ const app = {
                 </div>
             `;
 
-                        root.insertAdjacentHTML('beforeend', html);
-                        const modalEl = document.getElementById(id);
+            root.insertAdjacentHTML('beforeend', html);
+            const modalEl = document.getElementById(id);
 
-                        // Trigger animation
-                        requestAnimationFrame(() => {
-                            document.body.classList.add('modal-active');
-                            // Executar onShow callback se existir
-                            if (typeof onShow === 'function') {
-                                onShow(id);
-                            }
-                        });
+            // Trigger animation
+            requestAnimationFrame(() => {
+                document.body.classList.add('modal-active');
+                // Executar onShow callback se existir
+                if (typeof onShow === 'function') {
+                    onShow(id);
+                }
+            });
 
-                        const cleanup = (value) => {
-                            document.body.classList.remove('modal-active');
-                            modalEl.style.opacity = '0';
-                            setTimeout(() => {
-                                modalEl.remove();
-                                resolve(value);
-                            }, 300);
-                        };
+            const cleanup = (value) => {
+                document.body.classList.remove('modal-active');
+                modalEl.style.opacity = '0';
+                setTimeout(() => {
+                    modalEl.remove();
+                    resolve(value);
+                }, 300);
+            };
 
-                        const inputField = document.getElementById(`${id}-input`);
-                        if (inputField) {
-                            inputField.addEventListener('keyup', (e) => {
-                                if (e.key === 'Enter') document.getElementById(`${id}-confirm`).click();
-                            });
-                        }
+            const inputField = document.getElementById(`${id}-input`);
+            if (inputField) {
+                inputField.addEventListener('keyup', (e) => {
+                    if (e.key === 'Enter') document.getElementById(`${id}-confirm`).click();
+                });
+            }
 
-                        document.getElementById(`${id}-confirm`).onclick = () => {
-                            // If it's a generic input, resolve with its value
-                            if (input) {
-                                cleanup(inputField.value);
-                                return;
-                            }
+            document.getElementById(`${id}-confirm`).onclick = () => {
+                // If it's a generic input, resolve with its value
+                if (input) {
+                    cleanup(inputField.value);
+                    return;
+                }
 
-                            // Allow custom callback for complex modals
-                            if (typeof onConfirm === 'function') {
-                                onConfirm();
-                                cleanup(true);
-                                return;
-                            }
+                // Allow custom callback for complex modals
+                if (typeof onConfirm === 'function') {
+                    onConfirm();
+                    cleanup(true);
+                    return;
+                }
 
-                            // Custom logic for Chord Creator...
+                // Custom logic for Chord Creator...
 
-                            // Custom logic for Chord Creator: grab values before they disappear from DOM
-                            const nameInp = document.getElementById('new-chord-name');
-                            const barInp = document.getElementById('chord-bar');
-                            const noBarInp = document.getElementById('chord-no-bar');
+                // Custom logic for Chord Creator: grab values before they disappear from DOM
+                const nameInp = document.getElementById('new-chord-name');
+                const barInp = document.getElementById('chord-bar');
+                const noBarInp = document.getElementById('chord-no-bar');
 
-                            if (nameInp && barInp) {
-                                cleanup({
-                                    name: nameInp.value,
-                                    bar: parseInt(barInp.value),
-                                    noBar: noBarInp ? noBarInp.checked : false
-                                });
-                            } else {
-                                cleanup(true);
-                            }
-                        };
-
-                        if (cancelText) {
-                            document.getElementById(`${id}-cancel`).onclick = () => cleanup(null);
-                        }
+                if (nameInp && barInp) {
+                    cleanup({
+                        name: nameInp.value,
+                        bar: parseInt(barInp.value),
+                        noBar: noBarInp ? noBarInp.checked : false
                     });
-                },
+                } else {
+                    cleanup(true);
+                }
+            };
 
-                getGenreIcon: (genre) => {
-                    if (!genre) return '';
-                    const map = {
-                        'Sertanejo': 'genero_sertanejo.svg',
-                        'Rock': 'genero_rock.svg',
-                        'MPB': 'genero_mpb.svg',
-                        'Acústico': 'genero_acustico.svg'
-                    };
-                    const file = map[genre];
-                    return file ? `<img src="icons/${file}" class="genre-icon-bg">` : '';
-                },
+            if (cancelText) {
+                document.getElementById(`${id}-cancel`).onclick = () => cleanup(null);
+            }
+        });
+    },
 
-                isActualChord: (name) => {
-                    if (!name) return false;
-                    // Ignora marcadores de loop e pausa
-                    if (name.includes('|') || name.includes('.') || name.startsWith('p|')) return false;
+    getGenreIcon: (genre) => {
+        if (!genre) return '';
+        const map = {
+            'Sertanejo': 'genero_sertanejo.svg',
+            'Rock': 'genero_rock.svg',
+            'MPB': 'genero_mpb.svg',
+            'Acústico': 'genero_acustico.svg'
+        };
+        const file = map[genre];
+        return file ? `<img src="icons/${file}" class="genre-icon-bg">` : '';
+    },
 
-                    const clean = name.trim().toLowerCase();
+    isActualChord: (name) => {
+        if (!name) return false;
+        // Ignora marcadores de loop e pausa
+        if (name.includes('|') || name.includes('.') || name.startsWith('p|')) return false;
 
-                    // Lista negra de termos comuns que não são acordes
-                    const blacklist = ['intro', 'solo', 'riff', 'refrão', 'ponte', 'bridge', 'final', 'outro', 'instrumental', 'parte', 'pré-refrão', 'coro', 'batida', 'ritmo'];
-                    if (blacklist.some(term => clean.includes(term))) return false;
+        const clean = name.trim().toLowerCase();
 
-                    // Ignora frases ou nomes muito longos (seções)
-                    if (clean.length > 10 || clean.includes(' ')) return false;
+        // Lista negra de termos comuns que não são acordes
+        const blacklist = ['intro', 'solo', 'riff', 'refrão', 'ponte', 'bridge', 'final', 'outro', 'instrumental', 'parte', 'pré-refrão', 'coro', 'batida', 'ritmo'];
+        if (blacklist.some(term => clean.includes(term))) return false;
 
-                    // Padrão básico de acorde (Começa com A-G)
-                    return /^[A-Ga-g]/.test(clean);
-                },
+        // Ignora frases ou nomes muito longos (seções)
+        if (clean.length > 10 || clean.includes(' ')) return false;
 
-                loadCifra: async (id) => {
-                    try {
-                        const doc = await app.db.collection('cifras').doc(id).get();
+        // Padrão básico de acorde (Começa com A-G)
+        return /^[A-Ga-g]/.test(clean);
+    },
 
-                        if (!doc.exists) {
-                            alert('Cifra não encontrada.');
-                            app.navigate('home');
-                            return;
-                        }
+    loadCifra: async (id) => {
+        try {
+            const doc = await app.db.collection('cifras').doc(id).get();
 
-                        const data = { id: doc.id, ...doc.data() };
+            if (!doc.exists) {
+                alert('Cifra não encontrada.');
+                app.navigate('home');
+                return;
+            }
 
-                        // --- Metronome Setup ---
-                        app.stopMetronome();
-                        if (data.bpm && app.state.user) {
-                            app.state.metronome.bpm = parseInt(data.bpm);
-                            document.getElementById('metronome-bpm-label').innerText = `BPM: ${data.bpm}`;
-                            document.getElementById('metronome-display').style.display = 'flex';
-                            // app.startMetronome(); // REMOVED: No more auto-start
-                        } else {
-                            document.getElementById('metronome-display').style.display = 'none';
-                        }
+            const data = { id: doc.id, ...doc.data() };
 
-                        // --- YouTube Setup ---
-                        const btnYoutube = document.getElementById('btn-youtube-view');
-                        const btnTraining = document.getElementById('btn-youtube-training');
+            // --- Metronome Setup ---
+            app.stopMetronome();
+            if (data.bpm && app.state.user) {
+                app.state.metronome.bpm = parseInt(data.bpm);
+                document.getElementById('metronome-bpm-label').innerText = `BPM: ${data.bpm}`;
+                document.getElementById('metronome-display').style.display = 'flex';
+                // app.startMetronome(); // REMOVED: No more auto-start
+            } else {
+                document.getElementById('metronome-display').style.display = 'none';
+            }
 
-                        if (data.youtube) {
-                            btnYoutube.style.display = 'flex';
-                        } else {
-                            btnYoutube.style.display = 'none';
-                        }
+            // --- YouTube Setup ---
+            const btnYoutube = document.getElementById('btn-youtube-view');
+            const btnTraining = document.getElementById('btn-youtube-training');
 
-                        if (data.youtubeTraining && app.state.user) {
-                            btnTraining.style.display = 'flex';
-                        } else {
-                            btnTraining.style.display = 'none';
-                        }
+            if (data.youtube) {
+                btnYoutube.style.display = 'flex';
+            } else {
+                btnYoutube.style.display = 'none';
+            }
 
-                        app.state.currentCifra = data;
-                        document.getElementById('view-title').innerText = data.title;
-                        document.getElementById('view-artist').innerText = data.artist;
+            if (data.youtubeTraining && app.state.user) {
+                btnTraining.style.display = 'flex';
+            } else {
+                btnTraining.style.display = 'none';
+            }
 
-                        const genreEl = document.getElementById('view-genre');
-                        const capoEl = document.getElementById('view-capo');
+            app.state.currentCifra = data;
+            document.getElementById('view-title').innerText = data.title;
+            document.getElementById('view-artist').innerText = data.artist;
 
-                        if (data.genre) {
-                            genreEl.innerText = `🎵 ${data.genre}`;
-                            genreEl.style.display = 'inline-block';
-                        } else {
-                            genreEl.style.display = 'none';
-                        }
+            const genreEl = document.getElementById('view-genre');
+            const capoEl = document.getElementById('view-capo');
 
-                        const tomEl = document.getElementById('view-tom');
-                        if (data.tom) {
-                            tomEl.innerText = `🎼 Tom: ${data.tom}`;
-                            tomEl.style.display = 'inline-block';
-                        } else {
-                            tomEl.style.display = 'none';
-                        }
+            if (data.genre) {
+                genreEl.innerText = `🎵 ${data.genre}`;
+                genreEl.style.display = 'inline-block';
+            } else {
+                genreEl.style.display = 'none';
+            }
 
-                        if (data.capo) {
-                            capoEl.innerText = `🎸 ${data.capo}`;
-                            capoEl.style.display = 'inline-block';
-                        } else {
-                            capoEl.style.display = 'none';
-                        }
+            const tomEl = document.getElementById('view-tom');
+            if (data.tom) {
+                tomEl.innerText = `🎼 Tom: ${data.tom}`;
+                tomEl.style.display = 'inline-block';
+            } else {
+                tomEl.style.display = 'none';
+            }
 
-                        // --- Render Content & Loops ---
-                        let contentHtml = data.content;
-                        contentHtml = contentHtml.replace(/\r\n/g, '\n');
+            if (data.capo) {
+                capoEl.innerText = `🎸 ${data.capo}`;
+                capoEl.style.display = 'inline-block';
+            } else {
+                capoEl.style.display = 'none';
+            }
 
-                        // Pause Markers - Syntax: [p|tabletPC|mobile|]
-                        contentHtml = contentHtml.replace(/\[p\|(\d*)(?:\|(\d*))?\|?\]/g, (match, d1, d2) => {
-                            const delayTabletPC = d1 ? parseInt(d1) : 0;
-                            const delayMobile = d2 ? parseInt(d2) : delayTabletPC;
+            // --- Render Content & Loops ---
+            let contentHtml = data.content;
+            contentHtml = contentHtml.replace(/\r\n/g, '\n');
 
-                            return `<div class="pause-trigger" 
+            // Pause Markers - Syntax: [p|tabletPC|mobile|]
+            contentHtml = contentHtml.replace(/\[p\|(\d*)(?:\|(\d*))?\|?\]/g, (match, d1, d2) => {
+                const delayTabletPC = d1 ? parseInt(d1) : 0;
+                const delayMobile = d2 ? parseInt(d2) : delayTabletPC;
+
+                return `<div class="pause-trigger" 
                     data-delay="${delayTabletPC}" 
                     data-delay-mobile="${delayMobile}" 
                     style="height: 1px; width: 100%; opacity: 0; pointer-events: none; margin: 0;"></div>`;
-                        });
+            });
 
-                        contentHtml = contentHtml.replace(/\[\|(\d*)(?:\|(\d*))?(?:\|(\d*))?\|?\]/g, '');
-                        contentHtml = contentHtml.replace(/\[\.\|(\d*)(?:\|(\d*))?(?:\|(\d*))?\|?\.\]/g, '');
+            contentHtml = contentHtml.replace(/\[\|(\d*)(?:\|(\d*))?(?:\|(\d*))?\|?\]/g, '');
+            contentHtml = contentHtml.replace(/\[\.\|(\d*)(?:\|(\d*))?(?:\|(\d*))?\|?\.\]/g, '');
 
-                        // --- Tabs / Solo ---
-                        const tabsDiv = document.getElementById('view-tabs');
-                        const toggleContainer = document.getElementById('cifra-mode-toggle');
-                        const btnLyrics = document.getElementById('btn-mode-lyrics');
-                        const btnTabs = document.getElementById('btn-mode-tabs');
+            // --- Tabs / Solo ---
+            const tabsDiv = document.getElementById('view-tabs');
+            const toggleContainer = document.getElementById('cifra-mode-toggle');
+            const btnLyrics = document.getElementById('btn-mode-lyrics');
+            const btnTabs = document.getElementById('btn-mode-tabs');
 
-                        const hasTabs = !!(data.tabs && data.tabs.trim());
-                        const hasBpm = !!(data.bpm && app.state.user);
+            const hasTabs = !!(data.tabs && data.tabs.trim());
+            const hasBpm = !!(data.bpm && app.state.user);
 
-                        if (hasTabs || hasBpm) {
-                            toggleContainer.style.display = 'flex';
+            if (hasTabs || hasBpm) {
+                toggleContainer.style.display = 'flex';
 
-                            if (hasTabs) {
-                                tabsDiv.innerText = data.tabs;
-                                btnLyrics.style.display = 'inline-block';
-                                btnTabs.style.display = 'inline-block';
-                            } else {
-                                btnLyrics.style.display = 'none';
-                                btnTabs.style.display = 'none';
-                            }
-                            app.setContentView('lyrics'); // Reset to lyrics
-                        } else {
-                            toggleContainer.style.display = 'none';
-                            app.setContentView('lyrics');
-                        }
+                if (hasTabs) {
+                    tabsDiv.innerText = data.tabs;
+                    btnLyrics.style.display = 'inline-block';
+                    btnTabs.style.display = 'inline-block';
+                } else {
+                    btnLyrics.style.display = 'none';
+                    btnTabs.style.display = 'none';
+                }
+                app.setContentView('lyrics'); // Reset to lyrics
+            } else {
+                toggleContainer.style.display = 'none';
+                app.setContentView('lyrics');
+            }
 
-                        // Standard Chord Replacement (Regex) - Reverting Smart Logic
-                        contentHtml = contentHtml.replace(/\[([^\]]+)\]/g, (match, chordName) => {
-                            if (chordName.startsWith('|') || chordName.startsWith('.')) return match;
+            // Standard Chord Replacement (Regex) - Reverting Smart Logic
+            contentHtml = contentHtml.replace(/\[([^\]]+)\]/g, (match, chordName) => {
+                if (chordName.startsWith('|') || chordName.startsWith('.')) return match;
 
-                            const openB = '<span class="chord-bracket">[</span>';
-                            const closeB = '<span class="chord-bracket">]</span>';
+                const openB = '<span class="chord-bracket">[</span>';
+                const closeB = '<span class="chord-bracket">]</span>';
 
-                            const fullChordName = chordName;
-                            const cleanBase = chordName.replace(/\*+$/, '');
+                const fullChordName = chordName;
+                const cleanBase = chordName.replace(/\*+$/, '');
 
-                            if (app.isActualChord(cleanBase)) {
-                                return `${openB}<b class="interactive-chord" onclick="app.showChordPopover(event, '${fullChordName}')">${fullChordName}</b>${closeB}`;
-                            } else {
-                                return `${openB}<b class="section-marker">${fullChordName}</b>${closeB}`;
-                            }
-                        });
+                if (app.isActualChord(cleanBase)) {
+                    return `${openB}<b class="interactive-chord" onclick="app.showChordPopover(event, '${fullChordName}')">${fullChordName}</b>${closeB}`;
+                } else {
+                    return `${openB}<b class="section-marker">${fullChordName}</b>${closeB}`;
+                }
+            });
 
-                        const contentDiv = document.getElementById('view-content');
-                        contentDiv.innerHTML = contentHtml;
+            const contentDiv = document.getElementById('view-content');
+            contentDiv.innerHTML = contentHtml;
 
-                        // --- Strumming ---
-                        const strumContainer = document.getElementById('view-strumming-container');
-                        const strumDisplay = document.getElementById('view-strumming');
+            // --- Strumming ---
+            const strumContainer = document.getElementById('view-strumming-container');
+            const strumDisplay = document.getElementById('view-strumming');
 
-                        if (data.strumming) {
-                            strumContainer.style.display = 'block';
-                            strumDisplay.innerHTML = app.renderStrumming(data.strumming);
-                        } else {
-                            strumContainer.style.display = 'none';
-                        }
+            if (data.strumming) {
+                strumContainer.style.display = 'block';
+                strumDisplay.innerHTML = app.renderStrumming(data.strumming);
+            } else {
+                strumContainer.style.display = 'none';
+            }
 
-                        // --- Chord Gallery ---
-                        const chordsContainer = document.getElementById('view-chords-container');
-                        const chordsList = document.getElementById('view-chords-list');
+            // --- Chord Gallery ---
+            const chordsContainer = document.getElementById('view-chords-container');
+            const chordsList = document.getElementById('view-chords-list');
 
-                        const chordRegex = /\[(.*?)\]/g;
-                        const foundChords = new Set();
-                        let match;
-                        while ((match = chordRegex.exec(data.content)) !== null) {
-                            const name = match[1];
-                            if (app.isActualChord(name)) {
-                                foundChords.add(name);
-                            }
-                        }
+            const chordRegex = /\[(.*?)\]/g;
+            const foundChords = new Set();
+            let match;
+            while ((match = chordRegex.exec(data.content)) !== null) {
+                const name = match[1];
+                if (app.isActualChord(name)) {
+                    foundChords.add(name);
+                }
+            }
 
-                        if (foundChords.size > 0) {
-                            chordsContainer.style.display = 'block';
-                            chordsList.innerHTML = '';
-                            foundChords.forEach(chordName => {
-                                const card = app.createChordCard(chordName, false);
-                                if (card) {
-                                    chordsList.appendChild(card);
-                                }
-                            });
-                        } else {
-                            chordsContainer.style.display = 'none';
-                        }
-
-                        // Show Actions only if logged in
-                        // Actions are now in the header, handled by renderHeader call in navigate
-                        // But we might need to re-render header here if we want to be sure? 
-                        // Actually navigate calls renderHeader('cifra'), which checks app.state.user. 
-                        // So it should be fine.
-                        app.renderHeader('cifra'); // Re-run to ensure buttons appear if state matches
-
-                    } catch (e) {
-                        console.error('Erro em loadCifra:', e);
-                        if (e.code === 'permission-denied') {
-                            alert('Acesso negado: Você não tem permissão para visualizar esta cifra (pode ser um Rascunho privado).');
-                            app.navigate('home');
-                        } else {
-                            alert(`Erro ao carregar cifra: ${e.message}`);
-                        }
+            if (foundChords.size > 0) {
+                chordsContainer.style.display = 'block';
+                chordsList.innerHTML = '';
+                foundChords.forEach(chordName => {
+                    const card = app.createChordCard(chordName, false);
+                    if (card) {
+                        chordsList.appendChild(card);
                     }
-                },
+                });
+            } else {
+                chordsContainer.style.display = 'none';
+            }
 
-                toggleMetronome: () => {
-                    if (app.state.metronome.active) {
-                        app.stopMetronome();
-                    } else {
-                        app.startMetronome();
+            // Show Actions only if logged in
+            // Actions are now in the header, handled by renderHeader call in navigate
+            // But we might need to re-render header here if we want to be sure? 
+            // Actually navigate calls renderHeader('cifra'), which checks app.state.user. 
+            // So it should be fine.
+            app.renderHeader('cifra'); // Re-run to ensure buttons appear if state matches
+
+        } catch (e) {
+            console.error('Erro em loadCifra:', e);
+            if (e.code === 'permission-denied') {
+                alert('Acesso negado: Você não tem permissão para visualizar esta cifra (pode ser um Rascunho privado).');
+                app.navigate('home');
+            } else {
+                alert(`Erro ao carregar cifra: ${e.message}`);
+            }
+        }
+    },
+
+    toggleMetronome: () => {
+        if (app.state.metronome.active) {
+            app.stopMetronome();
+        } else {
+            app.startMetronome();
+        }
+    },
+
+    startMetronome: () => {
+        const bpm = app.state.metronome.bpm;
+        if (!bpm || bpm <= 0) return;
+
+        app.stopMetronome();
+        const ms = (60 / bpm) * 1000;
+        const dot = document.getElementById('metronome-dot');
+
+        app.state.metronome.active = true;
+
+        // Setup Audio for Beep
+        if (!app.audioCtx) {
+            app.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        const playBeep = () => {
+            if (!app.state.metronome.active) return;
+            const osc = app.audioCtx.createOscillator();
+            const gain = app.audioCtx.createGain();
+
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, app.audioCtx.currentTime); // A5 note
+
+            gain.gain.setValueAtTime(0.1, app.audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, app.audioCtx.currentTime + 0.1);
+
+            osc.connect(gain);
+            gain.connect(app.audioCtx.destination);
+
+            osc.start();
+            osc.stop(app.audioCtx.currentTime + 0.1);
+        };
+
+        app.state.metronome.interval = setInterval(() => {
+            if (dot) {
+                dot.style.background = 'var(--primary-color)';
+                dot.style.transform = 'scale(1.3)';
+                setTimeout(() => {
+                    dot.style.background = 'var(--text-muted)';
+                    dot.style.transform = 'scale(1)';
+                }, 100);
+            }
+            playBeep();
+        }, ms);
+
+        // Play first beat immediately
+        playBeep();
+    },
+
+    stopMetronome: () => {
+        if (app.state.metronome.interval) {
+            clearInterval(app.state.metronome.interval);
+            app.state.metronome.interval = null;
+        }
+        app.state.metronome.active = false;
+
+        // Reset dot state
+        const dot = document.getElementById('metronome-dot');
+        if (dot) {
+            dot.style.background = 'var(--text-muted)';
+            dot.style.transform = 'scale(1)';
+        }
+    },
+
+
+
+    autoWrapChords: () => {
+        const textarea = document.getElementById('edit-content');
+        if (!textarea) return;
+
+        const content = textarea.value;
+        const lines = content.split('\n');
+
+        // Inclui suporte a: +, -, (), º, acidentes no baixo, extensões numéricas.
+        const chordPattern = /\b([A-G][b#]?(?:maj|min|m|M|aug|dim|sus|add)?\d*[\+\-]?º?(?:[b#]\d*)?(?:\([^)]+\))?(?:\/[A-G][b#]?[\+\-]?\d*)?)(?=\s|$)/g;
+
+        const newLines = lines.map(line => {
+            // Se a linha for apenas uma marcação de seção completa (ex: "[Intro]"), ignora
+            if (/^\[[^\]]+\]$/.test(line.trim())) return line;
+
+            const words = line.trim().split(/\s+/).filter(w => w.length > 0);
+            if (words.length === 0) return line;
+
+            // Busca matches de acordes usando a nova regex
+            const matches = [...line.matchAll(chordPattern)];
+
+            // --- Heurística para evitar identificar acordes dentro de letras ---
+            // 1. Se houver palavras longas (>3 caracteres) que NÃO são acordes, provavelmente é letra.
+            const hasLongLyricWords = words.some(w => w.length > 3 && !w.match(chordPattern));
+            if (hasLongLyricWords) return line;
+
+            // 2. Se a proporção de acordes for muito baixa, provavelmente é letra
+            // (Ex: "E você se foi" -> 1 match "E" em 4 palavras = 0.25)
+            const ratio = matches.length / words.length;
+            if (ratio < 0.5 && words.length > 1) return line;
+
+            // Critério: se houver acordes identificados
+            if (matches.length > 0) {
+                // Se a linha tiver colchetes (ex: "[Intro:] G D"), precisamos ser cuidadosos
+                // Substituir apenas o que NÃO está entre colchetes
+                let result = line;
+                // Uma estratégia simples: substituir os matches que não estão dentro de [ ]
+                const matchesToWrap = matches.filter(m => {
+                    const index = m.index;
+                    const before = line.substring(0, index);
+                    const openBrackets = (before.match(/\[/g) || []).length;
+                    const closeBrackets = (before.match(/\]/g) || []).length;
+                    return openBrackets === closeBrackets; // Está fora de colchetes
+                });
+
+                if (matchesToWrap.length > 0) {
+                    // Substituir do fim para o começo para manter os índices
+                    for (let i = matchesToWrap.length - 1; i >= 0; i--) {
+                        const m = matchesToWrap[i];
+                        result = result.substring(0, m.index) + `[${m[0]}]` + result.substring(m.index + m[0].length);
                     }
-                },
+                    return result;
+                }
+            }
 
-                startMetronome: () => {
-                    const bpm = app.state.metronome.bpm;
-                    if (!bpm || bpm <= 0) return;
+            return line;
+        });
 
-                    app.stopMetronome();
-                    const ms = (60 / bpm) * 1000;
-                    const dot = document.getElementById('metronome-dot');
-
-                    app.state.metronome.active = true;
-
-                    // Setup Audio for Beep
-                    if (!app.audioCtx) {
-                        app.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                    }
-
-                    const playBeep = () => {
-                        if (!app.state.metronome.active) return;
-                        const osc = app.audioCtx.createOscillator();
-                        const gain = app.audioCtx.createGain();
-
-                        osc.type = 'sine';
-                        osc.frequency.setValueAtTime(880, app.audioCtx.currentTime); // A5 note
-
-                        gain.gain.setValueAtTime(0.1, app.audioCtx.currentTime);
-                        gain.gain.exponentialRampToValueAtTime(0.001, app.audioCtx.currentTime + 0.1);
-
-                        osc.connect(gain);
-                        gain.connect(app.audioCtx.destination);
-
-                        osc.start();
-                        osc.stop(app.audioCtx.currentTime + 0.1);
-                    };
-
-                    app.state.metronome.interval = setInterval(() => {
-                        if (dot) {
-                            dot.style.background = 'var(--primary-color)';
-                            dot.style.transform = 'scale(1.3)';
-                            setTimeout(() => {
-                                dot.style.background = 'var(--text-muted)';
-                                dot.style.transform = 'scale(1)';
-                            }, 100);
-                        }
-                        playBeep();
-                    }, ms);
-
-                    // Play first beat immediately
-                    playBeep();
-                },
-
-                stopMetronome: () => {
-                    if (app.state.metronome.interval) {
-                        clearInterval(app.state.metronome.interval);
-                        app.state.metronome.interval = null;
-                    }
-                    app.state.metronome.active = false;
-
-                    // Reset dot state
-                    const dot = document.getElementById('metronome-dot');
-                    if (dot) {
-                        dot.style.background = 'var(--text-muted)';
-                        dot.style.transform = 'scale(1)';
-                    }
-                },
+        textarea.value = newLines.join('\n');
+        app.showToast('Acordes identificados e formatados! ✨');
+        app.updateEditorPreview();
+    },
 
 
 
-                autoWrapChords: () => {
-                    const textarea = document.getElementById('edit-content');
-                    if (!textarea) return;
+    deleteCurrent: async () => {
+        const res = await app.modal({
+            title: 'Excluir Cifra',
+            content: 'Tem certeza? Isso apagará para TODOS os usuários.',
+            confirmText: 'Excluir',
+            cancelText: 'Cancelar'
+        });
+        if (!res) return;
 
-                    const content = textarea.value;
-                    const lines = content.split('\n');
+        const id = app.state.currentCifra.id;
+        try {
+            await app.db.collection('cifras').doc(id).delete();
+            app.navigate('home');
+            app.showToast('Cifra excluída.');
+        } catch (e) {
+            console.error('Erro ao excluir:', e);
+            app.modal({ title: 'Erro', content: `Erro ao excluir: ${e.message}`, confirmText: 'OK', cancelText: null });
+        }
+    },
 
-                    // Inclui suporte a: +, -, (), º, acidentes no baixo, extensões numéricas.
-                    const chordPattern = /\b([A-G][b#]?(?:maj|min|m|M|aug|dim|sus|add)?\d*[\+\-]?º?(?:[b#]\d*)?(?:\([^)]+\))?(?:\/[A-G][b#]?[\+\-]?\d*)?)(?=\s|$)/g;
+    // --- SETLISTS ---
+    loadSetlists: async () => {
+        if (!app.state.user) return;
 
-                    const newLines = lines.map(line => {
-                        // Se a linha for apenas uma marcação de seção completa (ex: "[Intro]"), ignora
-                        if (/^\[[^\]]+\]$/.test(line.trim())) return line;
+        // Remove previous listener
+        if (app.state.unsubs.setlists) {
+            app.db.ref('setlists').off('value', app.state.unsubs.setlists);
+            app.state.unsubs.setlists = null;
+        }
 
-                        const words = line.trim().split(/\s+/).filter(w => w.length > 0);
-                        if (words.length === 0) return line;
+        // onSnapshot
+        const unsub = app.db.collection('setlists').onSnapshot((snap) => {
+            const setlists = [];
+            snap.forEach(doc => {
+                setlists.push({ id: doc.id, ...doc.data() });
+            });
+            // Manual sort
+            setlists.sort((a, b) => {
+                const ta = a.updatedAt ? (a.updatedAt.seconds || 0) : 0;
+                const tb = b.updatedAt ? (b.updatedAt.seconds || 0) : 0;
+                return tb - ta;
+            });
+            app.state.setlists = setlists;
+            app.renderSetlistsGrid();
+        });
 
-                        // Busca matches de acordes usando a nova regex
-                        const matches = [...line.matchAll(chordPattern)];
+        app.state.unsubs.setlists = unsub;
+    },
 
-                        // --- Heurística para evitar identificar acordes dentro de letras ---
-                        // 1. Se houver palavras longas (>3 caracteres) que NÃO são acordes, provavelmente é letra.
-                        const hasLongLyricWords = words.some(w => w.length > 3 && !w.match(chordPattern));
-                        if (hasLongLyricWords) return line;
+    renderSetlistsGrid: () => {
+        const grid = document.getElementById('setlist-grid');
+        if (!grid) return;
 
-                        // 2. Se a proporção de acordes for muito baixa, provavelmente é letra
-                        // (Ex: "E você se foi" -> 1 match "E" em 4 palavras = 0.25)
-                        const ratio = matches.length / words.length;
-                        if (ratio < 0.5 && words.length > 1) return line;
+        if (app.state.setlists.length === 0) {
+            grid.innerHTML = '<p style="color:var(--text-muted)">Nenhum repertório criado ainda.</p>';
+            return;
+        }
 
-                        // Critério: se houver acordes identificados
-                        if (matches.length > 0) {
-                            // Se a linha tiver colchetes (ex: "[Intro:] G D"), precisamos ser cuidadosos
-                            // Substituir apenas o que NÃO está entre colchetes
-                            let result = line;
-                            // Uma estratégia simples: substituir os matches que não estão dentro de [ ]
-                            const matchesToWrap = matches.filter(m => {
-                                const index = m.index;
-                                const before = line.substring(0, index);
-                                const openBrackets = (before.match(/\[/g) || []).length;
-                                const closeBrackets = (before.match(/\]/g) || []).length;
-                                return openBrackets === closeBrackets; // Está fora de colchetes
-                            });
-
-                            if (matchesToWrap.length > 0) {
-                                // Substituir do fim para o começo para manter os índices
-                                for (let i = matchesToWrap.length - 1; i >= 0; i--) {
-                                    const m = matchesToWrap[i];
-                                    result = result.substring(0, m.index) + `[${m[0]}]` + result.substring(m.index + m[0].length);
-                                }
-                                return result;
-                            }
-                        }
-
-                        return line;
-                    });
-
-                    textarea.value = newLines.join('\n');
-                    app.showToast('Acordes identificados e formatados! ✨');
-                    app.updateEditorPreview();
-                },
-
-                saveCifra: async (e) => {
-                    e.preventDefault();
-                    const formData = new FormData(e.target);
-                    const data = Object.fromEntries(formData);
-
-                    // Handle checkbox manual (FormData behavior with unchecked boxes varies or just needs explicit handling)
-                    data.ready = document.getElementById('edit-ready').checked;
-
-                    // Ensure proper types
-                    if (data.scrollSpeed) data.scrollSpeed = parseInt(data.scrollSpeed);
-                    if (data.scrollSpeedMobile) data.scrollSpeedMobile = parseInt(data.scrollSpeedMobile);
-                    if (data.bpm) data.bpm = parseInt(data.bpm);
-                    else data.bpm = null;
-
-                    const id = data.id; // Empty only if new
-
-                    // Remove ID from payload to avoid storing it inside the doc redundantly (optional)
-                    delete data.id;
-
-                    // Add timestamp
-                    // Firestore uses ServerTimestamp
-                    data.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
-
-                    try {
-                        if (id) {
-                            // UPDATE
-                            // Check duplicate: Firestore logic
-                            const snap = await app.db.collection('cifras').where('title', '==', data.title.trim()).get();
-
-                            // Client-side filtering for artist
-                            let isDuplicate = false;
-                            snap.forEach(doc => {
-                                if (doc.id !== id && doc.data().artist === data.artist.trim()) {
-                                    isDuplicate = true;
-                                }
-                            });
-
-                            if (isDuplicate) {
-                                const confirmDup = confirm(`Atenção: Já existe outra música "${data.title}" de "${data.artist}". Salvar mesmo assim?`);
-                                if (!confirmDup) return;
-                            }
-
-                            await app.db.collection('cifras').doc(id).set(data, { merge: true });
-                            app.navigate('cifra', id);
-                        } else {
-                            // CREATE
-                            const snap = await app.db.collection('cifras').where('title', '==', data.title.trim()).get();
-                            let isDuplicate = false;
-                            snap.forEach(child => {
-                                if (child.val().artist === data.artist.trim()) {
-                                    isDuplicate = true;
-                                }
-                            });
-
-                            if (isDuplicate) {
-                                const confirmDup = confirm(`Atenção: Já existe "${data.title}" de "${data.artist}". Criar duplicata?`);
-                                if (!confirmDup) return;
-                            }
-
-                            // Push creates a new ref with ID
-                            const newRef = app.db.collection('cifras').doc();
-                            await newRef.set(data);
-                            app.navigate('cifra', newRef.id);
-                        }
-                    } catch (e) {
-                        console.error('Erro em saveCifra:', e);
-                        if (e.code === 'permission-denied') {
-                            app.modal({ title: 'Permissão Negada', content: 'Você não tem permissão para salvar alterações (apenas Admin?).', confirmText: 'OK', cancelText: null });
-                        } else {
-                            app.modal({ title: 'Erro', content: `Erro ao salvar: ${e.message}`, confirmText: 'OK', cancelText: null });
-                        }
-                    }
-                },
-
-                deleteCurrent: async () => {
-                    const res = await app.modal({
-                        title: 'Excluir Cifra',
-                        content: 'Tem certeza? Isso apagará para TODOS os usuários.',
-                        confirmText: 'Excluir',
-                        cancelText: 'Cancelar'
-                    });
-                    if (!res) return;
-
-                    const id = app.state.currentCifra.id;
-                    try {
-                        await app.db.collection('cifras').doc(id).delete();
-                        app.navigate('home');
-                        app.showToast('Cifra excluída.');
-                    } catch (e) {
-                        console.error('Erro ao excluir:', e);
-                        app.modal({ title: 'Erro', content: `Erro ao excluir: ${e.message}`, confirmText: 'OK', cancelText: null });
-                    }
-                },
-
-                // --- SETLISTS ---
-                loadSetlists: async () => {
-                    if (!app.state.user) return;
-
-                    // Remove previous listener
-                    if (app.state.unsubs.setlists) {
-                        app.db.ref('setlists').off('value', app.state.unsubs.setlists);
-                        app.state.unsubs.setlists = null;
-                    }
-
-                    // onSnapshot
-                    const unsub = app.db.collection('setlists').onSnapshot((snap) => {
-                        const setlists = [];
-                        snap.forEach(doc => {
-                            setlists.push({ id: doc.id, ...doc.data() });
-                        });
-                        // Manual sort
-                        setlists.sort((a, b) => {
-                            const ta = a.updatedAt ? (a.updatedAt.seconds || 0) : 0;
-                            const tb = b.updatedAt ? (b.updatedAt.seconds || 0) : 0;
-                            return tb - ta;
-                        });
-                        app.state.setlists = setlists;
-                        app.renderSetlistsGrid();
-                    });
-
-                    app.state.unsubs.setlists = unsub;
-                },
-
-                renderSetlistsGrid: () => {
-                    const grid = document.getElementById('setlist-grid');
-                    if (!grid) return;
-
-                    if (app.state.setlists.length === 0) {
-                        grid.innerHTML = '<p style="color:var(--text-muted)">Nenhum repertório criado ainda.</p>';
-                        return;
-                    }
-
-                    grid.innerHTML = app.state.setlists.map(s => `
+        grid.innerHTML = app.state.setlists.map(s => `
             <div class="cifra-card" onclick="app.playSetlist('${s.id}')">
                 <div class="cifra-title">${s.name}</div>
                 <div class="cifra-artist">${s.songs ? s.songs.length : 0} músicas</div>
@@ -1773,265 +1849,296 @@ const app = {
                 <img src="icons/repertorio.svg" class="genre-icon-bg">
             </div>
         `).join('');
-                },
+    },
 
-                promptCreateSetlist: async () => {
-                    const name = await app.modal({
-                        title: 'Novo Repertório',
-                        content: 'Digite o nome do novo repertório:',
-                        input: true,
-                        placeholder: 'Ex: Show de Sexta',
-                        confirmText: 'Criar',
-                        cancelText: 'Cancelar'
-                    });
-                    if (name && name.trim()) app.createSetlist(name.trim());
-                },
+    promptCreateSetlist: async () => {
+        const name = await app.modal({
+            title: 'Novo Repertório',
+            content: 'Digite o nome do novo repertório:',
+            input: true,
+            placeholder: 'Ex: Show de Sexta',
+            confirmText: 'Criar',
+            cancelText: 'Cancelar'
+        });
+        if (name && name.trim()) app.createSetlist(name.trim());
+    },
 
-                createSetlist: async (name) => {
-                    try {
-                        await app.db.collection('setlists').add({
-                            name: name,
-                            songs: [],
-                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                        });
-                        // Listener should update UI
-                    } catch (e) {
-                        console.error(e);
-                        alert('Erro ao criar repertório.');
+    createSetlist: async (name) => {
+        try {
+            await app.db.collection('setlists').add({
+                name: name,
+                songs: [],
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            // Listener should update UI
+        } catch (e) {
+            console.error(e);
+            alert('Erro ao criar repertório.');
+        }
+    },
+
+    deleteSetlist: async (id) => {
+        const res = await app.modal({
+            title: 'Excluir Repertório',
+            content: 'Tem certeza que deseja apagar este repertório?',
+            confirmText: 'Excluir',
+            cancelText: 'Cancelar'
+        });
+        if (!res) return;
+        try {
+            await app.db.collection('setlists').doc(id).delete();
+            app.showToast('Repertório removido.');
+        } catch (e) {
+            console.error(e);
+            app.modal({ title: 'Erro', content: 'Erro ao excluir.', confirmText: 'OK', cancelText: null });
+        }
+    },
+
+    addToSetlistPrompt: async (songId) => {
+        if (!app.state.user) return;
+        if (app.state.setlists.length === 0) {
+            app.modal({ title: 'Atenção', content: 'Crie primeiro um repertório na tela de Repertórios.', confirmText: 'OK', cancelText: null });
+            return;
+        }
+
+        const choices = app.state.setlists.map((s, i) => `<div style="padding:0.5rem; border-bottom:1px solid #eee; cursor:pointer;" onclick="window._modalResolve(${i})">${s.name}</div>`).join('');
+
+        // We can't easily use the generic modal for listing yet without more config, 
+        // but let's just use the generic input modal but inform how to use it
+        const setlistNames = app.state.setlists.map((s, i) => `${i + 1}. ${s.name}`).join('\n');
+        const choice = await app.modal({
+            title: 'Adicionar ao Repertório',
+            content: `Escolha o número do repertório:\n\n${setlistNames}`,
+            input: true,
+            placeholder: 'Digite o número',
+            confirmText: 'Adicionar',
+            cancelText: 'Cancelar'
+        });
+
+        if (choice) {
+            const index = parseInt(choice) - 1;
+            if (app.state.setlists[index]) {
+                app.addToSetlist(app.state.setlists[index].id, songId);
+            }
+        }
+    },
+
+    addToSetlist: async (setlistId, songId) => {
+        try {
+            const ref = app.db.collection('setlists').doc(setlistId);
+            const doc = await ref.get();
+            if (!doc.exists) return;
+
+            const data = doc.data();
+            const songs = data.songs || [];
+
+            if (!songs.includes(songId)) {
+                songs.push(songId);
+                await ref.update({
+                    songs: songs,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                app.showToast('Música adicionada ao repertório!');
+            } else {
+                alert('Esta música já está neste repertório.');
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Erro ao adicionar música.');
+        }
+    },
+
+    // Assuming a 'login' function would be here, based on the provided snippet context.
+    // Since the full document doesn't contain a 'login' function, I'll place 'register' after 'addToSetlist'
+    // and before 'playSetlist', as it seems to be a new top-level function.
+    // The instruction "Add register function after login function" implies 'login' exists.
+    // Given the provided snippet for 'register' starts with `alert(data.message || 'Login falhou');`
+    // and `alert('Erro de conexão ao fazer login.');`, it suggests a login function was intended to be there.
+    // I will insert the register function here, and then the logout function as provided in the snippet.
+
+    // Placeholder for a hypothetical login function, as implied by the snippet context:
+    // login: async (e) => {
+    //     e.preventDefault();
+    //     const email = e.target.email.value;
+    //     const password = e.target.password.value;
+    //     try {
+    //         const res = await fetch(`${app.API_URL}/auth/login`, {
+    //             method: 'POST',
+    //             headers: { 'Content-Type': 'application/json' },
+    //             body: JSON.stringify({ email, password })
+    //         });
+    //         const data = await res.json();
+    //         if (res.ok) {
+    //             app.state.user = data.user;
+    //             localStorage.setItem('token', data.token);
+    //             app.navigate('home');
+    //         } else {
+    //             alert(data.message || 'Login falhou');
+    //         }
+    //     } catch (e) {
+    //         console.error(e);
+    //         alert('Erro de conexão ao fazer login.');
+    //     }
+    // },
+
+    register: async (e) => {
+        e.preventDefault();
+        const form = e.target;
+        const name = form.name.value;
+        const cpf = form.cpf ? form.cpf.value : '';
+        const phone = form.phone ? form.phone.value : '';
+        const email = form.email.value;
+        const password = form.password.value;
+        const type = form.type.value; // student, professor_start, etc.
+        const instrument = form.instrument ? form.instrument.value : 'Violão';
+
+        if (!email || !password || !name) {
+            app.showToast('Preencha os campos obrigatórios.');
+            return;
+        }
+
+        const btn = form.querySelector('button[type="submit"]');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerText = 'Criando conta...';
+        }
+
+        try {
+            // 1. Create Auth User
+            const userCredential = await app.auth.createUserWithEmailAndPassword(email, password);
+            const uid = userCredential.user.uid;
+
+            // 2. Determine Role & Plan ID
+            let role = 'student';
+            let plan_id = 1; // Free default
+
+            // Map type to IDs (Approximate mapping based on legacy)
+            // student -> 1
+            // professor_start -> 2
+            // professor_pro -> 3
+            // professor_elite -> 4
+            // school_basic -> 5
+
+            if (type.includes('professor')) {
+                role = 'school'; // or 'professor' if you have that role
+                if (type === 'professor_start') plan_id = 2;
+                if (type === 'professor_pro') plan_id = 3;
+                if (type === 'professor_elite') plan_id = 4;
+            } else if (type.includes('school')) {
+                role = 'school';
+                plan_id = 5;
+            }
+
+            // 3. Create Firestore Profile
+            const userData = {
+                email: email,
+                name: name,
+                role: role,
+                plan_id: plan_id,
+                cpf: cpf,
+                phone: phone,
+                instrument: instrument,
+                status: 'active', // Active default for now, or 'pending_payment'
+                section: role === 'admin' ? 'admin' : 'student',
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            await app.db.collection('users').doc(uid).set(userData);
+
+            // 4. Update Function State
+            const user = { id: uid, ...userData };
+            app.state.user = user;
+            localStorage.setItem('token', 'firebase-session');
+            localStorage.setItem('user', JSON.stringify(user));
+
+            app.showToast('Conta criada com sucesso! 🚀');
+
+            // 5. Payment Redirect (User Request for Test Link)
+            // Triggering for ALL registrations.
+
+            const paymentLink = 'https://link.infinitepay.io/saulo-diogo/VC01-TfsnAer-5,00';
+
+            // Allow all plans to see the link for testing
+            if (true) {
+                app.modal({
+                    title: 'Finalizar Assinatura 💳',
+                    content: `Sua conta foi criada! Para ativar o plano <b>${type.toUpperCase().replace('_', ' ')}</b>, finalize o pagamento de teste (R$ 5,00).`,
+                    confirmText: 'Pagar Agora',
+                    cancelText: 'Pagar depois',
+                    onConfirm: () => {
+                        window.location.href = paymentLink;
                     }
-                },
+                });
+                return;
+            }
 
-                deleteSetlist: async (id) => {
-                    const res = await app.modal({
-                        title: 'Excluir Repertório',
-                        content: 'Tem certeza que deseja apagar este repertório?',
-                        confirmText: 'Excluir',
-                        cancelText: 'Cancelar'
-                    });
-                    if (!res) return;
-                    try {
-                        await app.db.collection('setlists').doc(id).delete();
-                        app.showToast('Repertório removido.');
-                    } catch (e) {
-                        console.error(e);
-                        app.modal({ title: 'Erro', content: 'Erro ao excluir.', confirmText: 'OK', cancelText: null });
-                    }
-                },
+            // 6. Navigation
+            if (role === 'school') app.navigate('school');
+            else app.navigate('home');
 
-                addToSetlistPrompt: async (songId) => {
-                    if (!app.state.user) return;
-                    if (app.state.setlists.length === 0) {
-                        app.modal({ title: 'Atenção', content: 'Crie primeiro um repertório na tela de Repertórios.', confirmText: 'OK', cancelText: null });
-                        return;
-                    }
+        } catch (error) {
+            console.error('Registro falhou:', error);
+            let msg = error.message;
+            if (error.code === 'auth/email-already-in-use') msg = 'Este email já está cadastrado.';
+            else if (error.code === 'auth/weak-password') msg = 'A senha deve ter pelo menos 6 caracteres.';
 
-                    const choices = app.state.setlists.map((s, i) => `<div style="padding:0.5rem; border-bottom:1px solid #eee; cursor:pointer;" onclick="window._modalResolve(${i})">${s.name}</div>`).join('');
+            app.showToast('Erro: ' + msg);
+            if (btn) {
+                btn.disabled = false;
+                btn.innerText = 'Criar Conta';
+            }
+        }
+    },
 
-                    // We can't easily use the generic modal for listing yet without more config, 
-                    // but let's just use the generic input modal but inform how to use it
-                    const setlistNames = app.state.setlists.map((s, i) => `${i + 1}. ${s.name}`).join('\n');
-                    const choice = await app.modal({
-                        title: 'Adicionar ao Repertório',
-                        content: `Escolha o número do repertório:\n\n${setlistNames}`,
-                        input: true,
-                        placeholder: 'Digite o número',
-                        confirmText: 'Adicionar',
-                        cancelText: 'Cancelar'
-                    });
+    logout: () => {
+        app.state.user = null;
+        localStorage.removeItem('token');
+        app.navigate('login'); // Assuming a login page exists
+        app.showToast('Você foi desconectado.');
+    },
 
-                    if (choice) {
-                        const index = parseInt(choice) - 1;
-                        if (app.state.setlists[index]) {
-                            app.addToSetlist(app.state.setlists[index].id, songId);
-                        }
-                    }
-                },
+    playSetlist: async (id) => {
+        const setlist = app.state.setlists.find(s => s.id === id);
+        if (setlist && setlist.songs && setlist.songs.length > 0) {
+            app.state.currentSetlist = setlist;
+            app.state.currentSetlistIndex = 0;
+            app.navigate('cifra', setlist.songs[0]);
+        } else {
+            app.modal({ title: 'Atenção', content: 'Este repertório está vazio. Adicione músicas para começar a tocar.', confirmText: 'OK', cancelText: null });
+        }
+    },
 
-                addToSetlist: async (setlistId, songId) => {
-                    try {
-                        const ref = app.db.collection('setlists').doc(setlistId);
-                        const doc = await ref.get();
-                        if (!doc.exists) return;
+    openSetlist: async (id) => {
+        const setlist = app.state.setlists.find(s => s.id === id);
+        if (setlist) {
+            app.state.currentSetlist = setlist;
 
-                        const data = doc.data();
-                        const songs = data.songs || [];
+            // Show reorder section
+            const reorderSection = document.getElementById('reorder-section');
+            const reorderList = document.getElementById('reorder-list');
+            const reorderTitle = document.getElementById('reorder-title');
 
-                        if (!songs.includes(songId)) {
-                            songs.push(songId);
-                            await ref.update({
-                                songs: songs,
-                                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                            });
-                            app.showToast('Música adicionada ao repertório!');
-                        } else {
-                            alert('Esta música já está neste repertório.');
-                        }
-                    } catch (e) {
-                        console.error(e);
-                        alert('Erro ao adicionar música.');
-                    }
-                },
+            reorderTitle.innerText = `Organizar: ${setlist.name}`;
+            reorderSection.style.display = 'block';
+            reorderSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-                // Assuming a 'login' function would be here, based on the provided snippet context.
-                // Since the full document doesn't contain a 'login' function, I'll place 'register' after 'addToSetlist'
-                // and before 'playSetlist', as it seems to be a new top-level function.
-                // The instruction "Add register function after login function" implies 'login' exists.
-                // Given the provided snippet for 'register' starts with `alert(data.message || 'Login falhou');`
-                // and `alert('Erro de conexão ao fazer login.');`, it suggests a login function was intended to be there.
-                // I will insert the register function here, and then the logout function as provided in the snippet.
+            // Load songs info
+            reorderList.innerHTML = '<p>Carregando músicas...</p>';
 
-                // Placeholder for a hypothetical login function, as implied by the snippet context:
-                // login: async (e) => {
-                //     e.preventDefault();
-                //     const email = e.target.email.value;
-                //     const password = e.target.password.value;
-                //     try {
-                //         const res = await fetch(`${app.API_URL}/auth/login`, {
-                //             method: 'POST',
-                //             headers: { 'Content-Type': 'application/json' },
-                //             body: JSON.stringify({ email, password })
-                //         });
-                //         const data = await res.json();
-                //         if (res.ok) {
-                //             app.state.user = data.user;
-                //             localStorage.setItem('token', data.token);
-                //             app.navigate('home');
-                //         } else {
-                //             alert(data.message || 'Login falhou');
-                //         }
-                //     } catch (e) {
-                //         console.error(e);
-                //         alert('Erro de conexão ao fazer login.');
-                //     }
-                // },
+            const songs = [];
+            for (const songId of (setlist.songs || [])) {
+                let c = app.state.cifras.find(x => x.id === songId);
+                if (!c) {
+                    const doc = await app.db.collection('cifras').doc(songId).get();
+                    if (doc.exists) c = { id: doc.id, ...doc.data() };
+                }
+                if (c) songs.push(c);
+            }
 
-                register: async (e) => {
-                    e.preventDefault();
-                    const form = e.target;
-                    const name = form.name.value;
-                    const cpf = form.cpf.value;
-                    const phone = form.phone.value;
-                    const email = form.email.value;
-                    // Password might be named 'password' or 'reg-password'. Checking form.
-                    // Assuming name="password" as per previous lines.
-                    const password = form.password ? form.password.value : document.getElementById('reg-password')?.value;
-                    const type = form.type.value;
-                    const instrument = form.instrument ? form.instrument.value : 'Violão'; // Default or from form
-
-                    console.log('DEBUG FRONTEND: Payload Type selected ->', type);
-                    console.log('DEBUG FRONTEND: Full Payload ->', { name, cpf, phone, instrument, email, password, type });
-
-                    try {
-                        const res = await fetch(`${app.API_URL}/auth/register`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ name, cpf, phone, instrument, email, password, type })
-                        });
-
-                        if (!res.ok) {
-                            const contentType = res.headers.get('content-type');
-                            if (contentType && contentType.indexOf('application/json') !== -1) {
-                                const errorData = await res.json();
-                                throw new Error(errorData.message || 'Erro no cadastro (Server)');
-                            } else {
-                                const text = await res.text();
-                                console.error('Non-JSON Error Response:', text);
-                                // Extract title from HTML if possible for cleaner alert
-                                const match = text.match(/<title>(.*?)<\/title>/i) || text.match(/<body>(.*?)<\/body>/i);
-                                const msg = match ? match[1] : text.substring(0, 100);
-                                throw new Error(`Erro do Servidor (${res.status}): ${msg}`);
-                            }
-                        }
-
-                        const data = await res.json();
-
-                        // Cadastro sucesso: Fazer Login automático
-                        localStorage.setItem('token', data.token);
-                        localStorage.setItem('user', JSON.stringify(data.user));
-                        app.state.user = data.user;
-
-                        // ... (rest of success logic) ...
-
-                        // Payment Redirect Handler (Moved from old logic if needed, or ensuring consistent flow)
-                        if (data.redirectUrl) {
-                            app.modal({
-                                title: 'Pagamento Necessário 💳',
-                                content: `Sua conta foi criada! Para ativar a licença do plano <b>${type.toUpperCase()}</b>, finalize o pagamento.`,
-                                confirmText: 'Pagar Agora',
-                                cancelText: 'Pagar depois',
-                                onConfirm: () => {
-                                    window.location.href = data.redirectUrl;
-                                }
-                            });
-                            return;
-                        }
-
-                        app.showToast('Conta criada com sucesso! 🚀');
-
-                        // Redirecionar baseado no role do usuário
-                        if (data.user.role === 'school') {
-                            app.navigate('school');
-                        } else if (data.user.role === 'admin') {
-                            app.navigate('admin');
-                        } else {
-                            app.navigate('home');
-                        }
-
-                    } catch (e) {
-                        console.error('Registro falhou:', e);
-                        alert('Falha: ' + e.message);
-                    }
-                },
-
-                logout: () => {
-                    app.state.user = null;
-                    localStorage.removeItem('token');
-                    app.navigate('login'); // Assuming a login page exists
-                    app.showToast('Você foi desconectado.');
-                },
-
-                playSetlist: async (id) => {
-                    const setlist = app.state.setlists.find(s => s.id === id);
-                    if (setlist && setlist.songs && setlist.songs.length > 0) {
-                        app.state.currentSetlist = setlist;
-                        app.state.currentSetlistIndex = 0;
-                        app.navigate('cifra', setlist.songs[0]);
-                    } else {
-                        app.modal({ title: 'Atenção', content: 'Este repertório está vazio. Adicione músicas para começar a tocar.', confirmText: 'OK', cancelText: null });
-                    }
-                },
-
-                openSetlist: async (id) => {
-                    const setlist = app.state.setlists.find(s => s.id === id);
-                    if (setlist) {
-                        app.state.currentSetlist = setlist;
-
-                        // Show reorder section
-                        const reorderSection = document.getElementById('reorder-section');
-                        const reorderList = document.getElementById('reorder-list');
-                        const reorderTitle = document.getElementById('reorder-title');
-
-                        reorderTitle.innerText = `Organizar: ${setlist.name}`;
-                        reorderSection.style.display = 'block';
-                        reorderSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-                        // Load songs info
-                        reorderList.innerHTML = '<p>Carregando músicas...</p>';
-
-                        const songs = [];
-                        for (const songId of (setlist.songs || [])) {
-                            let c = app.state.cifras.find(x => x.id === songId);
-                            if (!c) {
-                                const doc = await app.db.collection('cifras').doc(songId).get();
-                                if (doc.exists) c = { id: doc.id, ...doc.data() };
-                            }
-                            if (c) songs.push(c);
-                        }
-
-                        if (songs.length === 0) {
-                            reorderList.innerHTML = '<p style="color:var(--text-muted)">Nenhuma música neste repertório.</p>';
-                        } else {
-                            reorderList.innerHTML = songs.map((s, i) => `
+            if (songs.length === 0) {
+                reorderList.innerHTML = '<p style="color:var(--text-muted)">Nenhuma música neste repertório.</p>';
+            } else {
+                reorderList.innerHTML = songs.map((s, i) => `
                     <div class="sortable-item">
                         <div style="flex:1; cursor:pointer;" onclick="app.navigate('cifra', '${s.id}'); app.state.currentSetlistIndex = ${i};">
                             <span style="font-weight:bold; color:var(--primary-color);">${i + 1}.</span> ${s.title}
@@ -2049,320 +2156,320 @@ const app = {
                         </div>
                     </div>
                 `).join('');
-                        }
-                    }
-                },
+            }
+        }
+    },
 
-                moveInSetlist: async (index, direction) => {
-                    const setlist = app.state.currentSetlist;
-                    if (!setlist) return;
+    moveInSetlist: async (index, direction) => {
+        const setlist = app.state.currentSetlist;
+        if (!setlist) return;
 
-                    const songs = [...setlist.songs];
-                    const newIndex = index + direction;
+        const songs = [...setlist.songs];
+        const newIndex = index + direction;
 
-                    if (newIndex < 0 || newIndex >= songs.length) return;
+        if (newIndex < 0 || newIndex >= songs.length) return;
 
-                    // Swap
-                    [songs[index], songs[newIndex]] = [songs[newIndex], songs[index]];
+        // Swap
+        [songs[index], songs[newIndex]] = [songs[newIndex], songs[index]];
 
-                    try {
-                        await app.db.collection('setlists').doc(setlist.id).update({
-                            songs: songs,
-                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                        });
-                        // Update local state and refresh
-                        setlist.songs = songs;
-                        app.openSetlist(setlist.id);
-                        app.showToast('Ordem atualizada!');
-                    } catch (e) {
-                        alert('Erro ao reorganizar.');
-                    }
-                },
+        try {
+            await app.db.collection('setlists').doc(setlist.id).update({
+                songs: songs,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            // Update local state and refresh
+            setlist.songs = songs;
+            app.openSetlist(setlist.id);
+            app.showToast('Ordem atualizada!');
+        } catch (e) {
+            alert('Erro ao reorganizar.');
+        }
+    },
 
-                removeFromSetlist: async (index) => {
-                    const res = await app.modal({
-                        title: 'Remover música',
-                        content: 'Deseja remover esta música do repertório?',
-                        confirmText: 'Remover',
-                        cancelText: 'Cancelar'
-                    });
-                    if (!res) return;
+    removeFromSetlist: async (index) => {
+        const res = await app.modal({
+            title: 'Remover música',
+            content: 'Deseja remover esta música do repertório?',
+            confirmText: 'Remover',
+            cancelText: 'Cancelar'
+        });
+        if (!res) return;
 
-                    const setlist = app.state.currentSetlist;
-                    const songs = [...setlist.songs];
-                    songs.splice(index, 1);
+        const setlist = app.state.currentSetlist;
+        const songs = [...setlist.songs];
+        songs.splice(index, 1);
 
-                    try {
-                        await app.db.collection('setlists').doc(setlist.id).update({
-                            songs: songs,
-                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                        });
-                        setlist.songs = songs;
-                        app.openSetlist(setlist.id);
-                        app.showToast('Música removida.');
-                    } catch (e) {
-                        alert('Erro ao remover.');
-                    }
-                },
+        try {
+            await app.db.collection('setlists').doc(setlist.id).update({
+                songs: songs,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            setlist.songs = songs;
+            app.openSetlist(setlist.id);
+            app.showToast('Música removida.');
+        } catch (e) {
+            alert('Erro ao remover.');
+        }
+    },
 
-                renderSetlistNavigator: () => {
-                    const nav = document.getElementById('setlist-navigator');
-                    if (!nav) return; // Important: Element might not be in DOM yet or for this view
+    renderSetlistNavigator: () => {
+        const nav = document.getElementById('setlist-navigator');
+        if (!nav) return; // Important: Element might not be in DOM yet or for this view
 
-                    if (!app.state.currentSetlist) {
-                        nav.style.display = 'none';
-                        return;
-                    }
-                    nav.style.display = 'block';
-                    document.getElementById('setlist-name').innerText = app.state.currentSetlist.name;
-                    document.getElementById('setlist-pos').innerText = `${app.state.currentSetlistIndex + 1} de ${app.state.currentSetlist.songs.length}`;
-                },
+        if (!app.state.currentSetlist) {
+            nav.style.display = 'none';
+            return;
+        }
+        nav.style.display = 'block';
+        document.getElementById('setlist-name').innerText = app.state.currentSetlist.name;
+        document.getElementById('setlist-pos').innerText = `${app.state.currentSetlistIndex + 1} de ${app.state.currentSetlist.songs.length}`;
+    },
 
-                nextInSetlist: () => {
-                    if (!app.state.currentSetlist) return;
-                    if (app.state.currentSetlistIndex < app.state.currentSetlist.songs.length - 1) {
-                        app.state.currentSetlistIndex++;
-                        app.navigate('cifra', app.state.currentSetlist.songs[app.state.currentSetlistIndex]);
-                    } else {
-                        app.showToast('Fim do repertório');
-                    }
-                },
+    nextInSetlist: () => {
+        if (!app.state.currentSetlist) return;
+        if (app.state.currentSetlistIndex < app.state.currentSetlist.songs.length - 1) {
+            app.state.currentSetlistIndex++;
+            app.navigate('cifra', app.state.currentSetlist.songs[app.state.currentSetlistIndex]);
+        } else {
+            app.showToast('Fim do repertório');
+        }
+    },
 
-                prevInSetlist: () => {
-                    if (!app.state.currentSetlist) return;
-                    if (app.state.currentSetlistIndex > 0) {
-                        app.state.currentSetlistIndex--;
-                        app.navigate('cifra', app.state.currentSetlist.songs[app.state.currentSetlistIndex]);
-                    }
-                },
+    prevInSetlist: () => {
+        if (!app.state.currentSetlist) return;
+        if (app.state.currentSetlistIndex > 0) {
+            app.state.currentSetlistIndex--;
+            app.navigate('cifra', app.state.currentSetlist.songs[app.state.currentSetlistIndex]);
+        }
+    },
 
 
-                // --- HELPERS (Editor, Logic, Scroll) ---
-                // Mantendo a lógica de UI existente, apenas adaptando para não usar 'this' se possível
-                // Ou usar 'app' explicitamente.
+    // --- HELPERS (Editor, Logic, Scroll) ---
+    // Mantendo a lógica de UI existente, apenas adaptando para não usar 'this' se possível
+    // Ou usar 'app' explicitamente.
 
-                loadEditor: (cifra) => {
-                    // Populate inputs with defaults for new songs
-                    document.getElementById('edit-id').value = cifra.id || '';
-                    document.getElementById('edit-title').value = cifra.title || '';
-                    document.getElementById('edit-artist').value = cifra.artist || '';
-                    document.getElementById('edit-content').value = cifra.content || '[p|0|0|]\n\n';
-                    document.getElementById('edit-scrollSpeed').value = cifra.scrollSpeed || '1';
-                    document.getElementById('edit-scrollSpeedMobile').value = cifra.scrollSpeedMobile || cifra.scrollSpeed || '1';
-                    document.getElementById('edit-tom').value = cifra.tom || '';
-                    document.getElementById('edit-capo').value = cifra.capo || '';
-                    document.getElementById('edit-genre').value = cifra.genre || '';
-                    document.getElementById('edit-bpm').value = cifra.bpm || '';
-                    document.getElementById('edit-youtube').value = cifra.youtube || '';
-                    document.getElementById('edit-youtubeTraining').value = cifra.youtubeTraining || '';
-                    const strum = cifra.strumming || '';
-                    document.getElementById('edit-strumming').value = strum;
-                    document.getElementById('edit-ready').checked = !!cifra.ready;
-                    document.getElementById('edit-tabs').value = cifra.tabs || '';
+    loadEditor: (cifra) => {
+        // Populate inputs with defaults for new songs
+        document.getElementById('edit-id').value = cifra.id || '';
+        document.getElementById('edit-title').value = cifra.title || '';
+        document.getElementById('edit-artist').value = cifra.artist || '';
+        document.getElementById('edit-content').value = cifra.content || '[p|0|0|]\n\n';
+        document.getElementById('edit-scrollSpeed').value = cifra.scrollSpeed || '1';
+        document.getElementById('edit-scrollSpeedMobile').value = cifra.scrollSpeedMobile || cifra.scrollSpeed || '1';
+        document.getElementById('edit-tom').value = cifra.tom || '';
+        document.getElementById('edit-capo').value = cifra.capo || '';
+        document.getElementById('edit-genre').value = cifra.genre || '';
+        document.getElementById('edit-bpm').value = cifra.bpm || '';
+        document.getElementById('edit-youtube').value = cifra.youtube || '';
+        document.getElementById('edit-youtubeTraining').value = cifra.youtubeTraining || '';
+        const strum = cifra.strumming || '';
+        document.getElementById('edit-strumming').value = strum;
+        document.getElementById('edit-ready').checked = !!cifra.ready;
+        document.getElementById('edit-tabs').value = cifra.tabs || '';
 
-                    app.updateStrumPreview(strum);
-                    app.updateEditorChords();
-                    app.updateEditorPreview();
-                },
+        app.updateStrumPreview(strum);
+        app.updateEditorChords();
+        app.updateEditorPreview();
+    },
 
-                updateEditorChords: () => {
-                    const input = document.getElementById('edit-content');
-                    const chordsList = document.getElementById('edit-chords-list');
-                    const container = document.getElementById('edit-chords-container');
-                    if (!input || !chordsList || !container) return;
+    updateEditorChords: () => {
+        const input = document.getElementById('edit-content');
+        const chordsList = document.getElementById('edit-chords-list');
+        const container = document.getElementById('edit-chords-container');
+        if (!input || !chordsList || !container) return;
 
-                    const content = input.value;
-                    const chordRegex = /\[(.*?)\]/g;
-                    const foundChords = new Set();
-                    let match;
-                    while ((match = chordRegex.exec(content)) !== null) {
-                        const name = match[1];
-                        if (app.isActualChord(name)) {
-                            foundChords.add(name);
-                        }
-                    }
+        const content = input.value;
+        const chordRegex = /\[(.*?)\]/g;
+        const foundChords = new Set();
+        let match;
+        while ((match = chordRegex.exec(content)) !== null) {
+            const name = match[1];
+            if (app.isActualChord(name)) {
+                foundChords.add(name);
+            }
+        }
 
-                    if (foundChords.size > 0) {
-                        container.style.display = 'block';
-                        chordsList.innerHTML = '';
-                        foundChords.forEach(chordName => {
-                            const card = app.createChordCard(chordName, true);
-                            if (card) chordsList.appendChild(card);
-                        });
-                    } else {
-                        container.style.display = 'none';
-                    }
-                },
+        if (foundChords.size > 0) {
+            container.style.display = 'block';
+            chordsList.innerHTML = '';
+            foundChords.forEach(chordName => {
+                const card = app.createChordCard(chordName, true);
+                if (card) chordsList.appendChild(card);
+            });
+        } else {
+            container.style.display = 'none';
+        }
+    },
 
-                updateEditorPreview: () => {
-                    const input = document.getElementById('edit-content');
-                    const preview = document.getElementById('edit-preview');
-                    if (!input || !preview) return;
+    updateEditorPreview: () => {
+        const input = document.getElementById('edit-content');
+        const preview = document.getElementById('edit-preview');
+        if (!input || !preview) return;
 
-                    app.updateEditorChords();
+        app.updateEditorChords();
 
-                    let content = input.value;
-                    // Sanitizar
-                    content = content.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        let content = input.value;
+        // Sanitizar
+        content = content.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-                    // Pause Marker - Syntax: [p|tabletPC|mobile|]
-                    content = content.replace(/\[p\|(\d*)(?:\|(\d*))?\|?\]\n?/g, (match, d1, d2) => {
-                        const delayTabletPC = (d1 !== undefined && d1 !== '') ? parseInt(d1) : -1;
-                        const delayMobile = (d2 !== undefined && d2 !== '') ? parseInt(d2) : delayTabletPC;
+        // Pause Marker - Syntax: [p|tabletPC|mobile|]
+        content = content.replace(/\[p\|(\d*)(?:\|(\d*))?\|?\]\n?/g, (match, d1, d2) => {
+            const delayTabletPC = (d1 !== undefined && d1 !== '') ? parseInt(d1) : -1;
+            const delayMobile = (d2 !== undefined && d2 !== '') ? parseInt(d2) : delayTabletPC;
 
-                        const deskTxt = delayTabletPC === -1 ? 'Imediato' : (delayTabletPC === 0 ? 'Desativado' : delayTabletPC + 's');
-                        return `<div style="border-top: 1px dashed #10b981; color:#10b981; font-size:0.75rem; padding: 1px 0; margin-bottom: 2px;">⏸ Pausa (${deskTxt})</div>`;
-                    });
+            const deskTxt = delayTabletPC === -1 ? 'Imediato' : (delayTabletPC === 0 ? 'Desativado' : delayTabletPC + 's');
+            return `<div style="border-top: 1px dashed #10b981; color:#10b981; font-size:0.75rem; padding: 1px 0; margin-bottom: 2px;">⏸ Pausa (${deskTxt})</div>`;
+        });
 
-                    // Remove Loop Markers if present
-                    content = content.replace(/\[\|(\d*)(?:\|(\d*))?(?:\|(\d*))?\|?\]/g, '');
-                    content = content.replace(/\[\.\|(\d*)(?:\|(\d*))?(?:\|(\d*))?\|?\.\]/g, '');
+        // Remove Loop Markers if present
+        content = content.replace(/\[\|(\d*)(?:\|(\d*))?(?:\|(\d*))?\|?\]/g, '');
+        content = content.replace(/\[\.\|(\d*)(?:\|(\d*))?(?:\|(\d*))?\|?\.\]/g, '');
 
-                    // Chords - Standard Regex (No Smart)
-                    const formatted = content.replace(/\[([^\]]+)\]/g, (match, chord) => {
-                        if (match.includes('Loop')) return match;
-                        if (match.includes('<')) return match; // Already processed
-                        const fullChordName = chord;
-                        const cleanBase = chord.replace(/\*+$/, '');
+        // Chords - Standard Regex (No Smart)
+        const formatted = content.replace(/\[([^\]]+)\]/g, (match, chord) => {
+            if (match.includes('Loop')) return match;
+            if (match.includes('<')) return match; // Already processed
+            const fullChordName = chord;
+            const cleanBase = chord.replace(/\*+$/, '');
 
-                        const openB = '<span class="chord-bracket">[</span>';
-                        const closeB = '<span class="chord-bracket">]</span>';
+            const openB = '<span class="chord-bracket">[</span>';
+            const closeB = '<span class="chord-bracket">]</span>';
 
-                        if (app.isActualChord(cleanBase)) {
-                            return `${openB}<b class="interactive-chord" style="color:var(--chord-color); cursor:pointer;" onclick="app.showChordPopover(event, '${fullChordName}')">${fullChordName}</b>${closeB}`;
-                        } else {
-                            return `${openB}<b class="section-marker" style="color:var(--primary-color); font-weight:700;">${fullChordName}</b>${closeB}`;
-                        }
-                    });
+            if (app.isActualChord(cleanBase)) {
+                return `${openB}<b class="interactive-chord" style="color:var(--chord-color); cursor:pointer;" onclick="app.showChordPopover(event, '${fullChordName}')">${fullChordName}</b>${closeB}`;
+            } else {
+                return `${openB}<b class="section-marker" style="color:var(--primary-color); font-weight:700;">${fullChordName}</b>${closeB}`;
+            }
+        });
 
-                    preview.innerHTML = formatted;
-                },
+        preview.innerHTML = formatted;
+    },
 
-                syncEditorScroll: () => {
-                    const input = document.getElementById('edit-content');
-                    const preview = document.getElementById('edit-preview');
-                    if (!input || !preview) return;
-                    preview.scrollTop = input.scrollTop;
-                },
+    syncEditorScroll: () => {
+        const input = document.getElementById('edit-content');
+        const preview = document.getElementById('edit-preview');
+        if (!input || !preview) return;
+        preview.scrollTop = input.scrollTop;
+    },
 
-                strumMapping: {
-                    'U': 'batida para cima.svg', 'D': 'batida para baixo.svg',
-                    'u': 'abafado para cima.svg', 'd': 'abafado para baixo.svg',
-                    'X': 'abafado.svg', 'C': 'batida circular.svg',
-                    '|': 'divider', ' ': 'space'
-                },
+    strumMapping: {
+        'U': 'batida para cima.svg', 'D': 'batida para baixo.svg',
+        'u': 'abafado para cima.svg', 'd': 'abafado para baixo.svg',
+        'X': 'abafado.svg', 'C': 'batida circular.svg',
+        '|': 'divider', ' ': 'space'
+    },
 
-                addStrum: (icon, char) => {
-                    const input = document.getElementById('edit-strumming');
-                    input.value += char;
-                    app.updateStrumPreview(input.value);
-                },
+    addStrum: (icon, char) => {
+        const input = document.getElementById('edit-strumming');
+        input.value += char;
+        app.updateStrumPreview(input.value);
+    },
 
-                clearStrum: () => {
-                    const input = document.getElementById('edit-strumming');
-                    input.value = '';
-                    app.updateStrumPreview('');
-                },
+    clearStrum: () => {
+        const input = document.getElementById('edit-strumming');
+        input.value = '';
+        app.updateStrumPreview('');
+    },
 
-                updateStrumPreview: (strumString) => {
-                    const preview = document.getElementById('edit-strumming-preview');
-                    if (!strumString) {
-                        preview.innerHTML = '<span style="color: var(--text-muted); font-size: 0.9rem;">Toque nos botões acima para criar a batida...</span>';
-                        return;
-                    }
-                    preview.innerHTML = app.renderStrumming(strumString);
-                },
+    updateStrumPreview: (strumString) => {
+        const preview = document.getElementById('edit-strumming-preview');
+        if (!strumString) {
+            preview.innerHTML = '<span style="color: var(--text-muted); font-size: 0.9rem;">Toque nos botões acima para criar a batida...</span>';
+            return;
+        }
+        preview.innerHTML = app.renderStrumming(strumString);
+    },
 
-                renderStrumming: (strumString) => {
-                    if (!strumString) return '';
-                    const chars = strumString.split('');
-                    return chars.map((c, index) => {
-                        const file = app.strumMapping[c];
-                        let content = '';
-                        if (file === 'divider') content = '<span class="strum-divider">|</span>';
-                        else if (file === 'space') content = '<span class="strum-space"></span>';
-                        else if (file) content = `<img src="icons/${file}" class="strum-icon">`;
+    renderStrumming: (strumString) => {
+        if (!strumString) return '';
+        const chars = strumString.split('');
+        return chars.map((c, index) => {
+            const file = app.strumMapping[c];
+            let content = '';
+            if (file === 'divider') content = '<span class="strum-divider">|</span>';
+            else if (file === 'space') content = '<span class="strum-space"></span>';
+            else if (file) content = `<img src="icons/${file}" class="strum-icon">`;
 
-                        if (!content) return '';
-                        return `<span class="strum-item" onclick="app.removeStrum(${index})" title="Toque para apagar" style="cursor:pointer; display:flex; align-items:center;">${content}</span>`;
-                    }).join('');
-                },
+            if (!content) return '';
+            return `<span class="strum-item" onclick="app.removeStrum(${index})" title="Toque para apagar" style="cursor:pointer; display:flex; align-items:center;">${content}</span>`;
+        }).join('');
+    },
 
-                setContentView: (mode) => {
-                    const lyricsView = document.getElementById('view-content');
-                    const tabsView = document.getElementById('view-tabs');
-                    const btnLyrics = document.getElementById('btn-mode-lyrics');
-                    const btnTabs = document.getElementById('btn-mode-tabs');
+    setContentView: (mode) => {
+        const lyricsView = document.getElementById('view-content');
+        const tabsView = document.getElementById('view-tabs');
+        const btnLyrics = document.getElementById('btn-mode-lyrics');
+        const btnTabs = document.getElementById('btn-mode-tabs');
 
-                    const chordsContainer = document.getElementById('view-chords-container');
-                    const strumContainer = document.getElementById('view-strumming-container');
+        const chordsContainer = document.getElementById('view-chords-container');
+        const strumContainer = document.getElementById('view-strumming-container');
 
-                    if (mode === 'tabs') {
-                        lyricsView.classList.add('hidden');
-                        tabsView.classList.remove('hidden');
-                        btnTabs.classList.add('active');
-                        btnLyrics.classList.remove('active');
+        if (mode === 'tabs') {
+            lyricsView.classList.add('hidden');
+            tabsView.classList.remove('hidden');
+            btnTabs.classList.add('active');
+            btnLyrics.classList.remove('active');
 
-                        if (chordsContainer) chordsContainer.style.opacity = '0.3';
-                        if (strumContainer) strumContainer.style.opacity = '0.3';
-                    } else {
-                        lyricsView.classList.remove('hidden');
-                        tabsView.classList.add('hidden');
-                        btnLyrics.classList.add('active');
-                        btnTabs.classList.remove('active');
+            if (chordsContainer) chordsContainer.style.opacity = '0.3';
+            if (strumContainer) strumContainer.style.opacity = '0.3';
+        } else {
+            lyricsView.classList.remove('hidden');
+            tabsView.classList.add('hidden');
+            btnLyrics.classList.add('active');
+            btnTabs.classList.remove('active');
 
-                        if (chordsContainer) chordsContainer.style.opacity = '1';
-                        if (strumContainer) strumContainer.style.opacity = '1';
-                    }
-                },
+            if (chordsContainer) chordsContainer.style.opacity = '1';
+            if (strumContainer) strumContainer.style.opacity = '1';
+        }
+    },
 
-                removeStrum: (index) => {
-                    const input = document.getElementById('edit-strumming');
-                    if (!input) return;
-                    const val = input.value;
-                    const newVal = val.slice(0, index) + val.slice(index + 1);
-                    input.value = newVal;
-                    app.updateStrumPreview(newVal);
+    removeStrum: (index) => {
+        const input = document.getElementById('edit-strumming');
+        if (!input) return;
+        const val = input.value;
+        const newVal = val.slice(0, index) + val.slice(index + 1);
+        input.value = newVal;
+        app.updateStrumPreview(newVal);
 
-                    // Keep focus on preview if possible, unless empty
-                    const preview = document.getElementById('edit-strumming-preview');
-                    if (preview && newVal.length > 0) preview.focus();
-                },
+        // Keep focus on preview if possible, unless empty
+        const preview = document.getElementById('edit-strumming-preview');
+        if (preview && newVal.length > 0) preview.focus();
+    },
 
-                handleStrumInput: (e) => {
-                    // Prevent default scrolling for Space
-                    if (e.key === ' ' || e.code === 'Space') {
-                        e.preventDefault();
-                        app.addStrum('SPACE', ' ');
-                        return;
-                    }
+    handleStrumInput: (e) => {
+        // Prevent default scrolling for Space
+        if (e.key === ' ' || e.code === 'Space') {
+            e.preventDefault();
+            app.addStrum('SPACE', ' ');
+            return;
+        }
 
-                    if (e.key === 'Backspace') {
-                        e.preventDefault();
-                        const input = document.getElementById('edit-strumming');
-                        if (input && input.value.length > 0) {
-                            // Remove last char
-                            const newVal = input.value.slice(0, -1);
-                            input.value = newVal;
-                            app.updateStrumPreview(newVal);
-                        }
-                        return;
-                    }
-                },
+        if (e.key === 'Backspace') {
+            e.preventDefault();
+            const input = document.getElementById('edit-strumming');
+            if (input && input.value.length > 0) {
+                // Remove last char
+                const newVal = input.value.slice(0, -1);
+                input.value = newVal;
+                app.updateStrumPreview(newVal);
+            }
+            return;
+        }
+    },
 
-                editCurrent: () => {
-                    app.navigate('editor', app.state.currentCifra);
-                },
+    editCurrent: () => {
+        app.navigate('editor', app.state.currentCifra);
+    },
 
-                // --- CHORDS LIBRARY & SELECTOR ---
-                createChordCard: (chordName, isEditable = false) => {
-                    const svg = Chords.render(chordName, 0);
+    // --- CHORDS LIBRARY & SELECTOR ---
+    createChordCard: (chordName, isEditable = false) => {
+        const svg = Chords.render(chordName, 0);
 
-                    if (!svg) {
-                        // Placeholder para acorde não cadastrado
-                        const card = document.createElement('div');
-                        card.className = 'chord-card missing-chord';
-                        card.innerHTML = `
+        if (!svg) {
+            // Placeholder para acorde não cadastrado
+            const card = document.createElement('div');
+            card.className = 'chord-card missing-chord';
+            card.innerHTML = `
                 <div class="chord-name" style="color:var(--text-muted)">${chordName}</div>
                 <div class="chord-svg-container" style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:120px; text-align:center; gap:8px;">
                     <div style="width:60px; height:70px; border:1px dashed var(--border-color); border-radius:4px; opacity:0.3; display:flex; align-items:center; justify-content:center;">
@@ -2371,32 +2478,32 @@ const app = {
                     ${isEditable ? `<button type="button" class="btn btn-outline" style="font-size:0.7rem; padding:4px 10px; height:auto; min-width:80px;" onclick="event.stopPropagation(); app.openChordCreator('${chordName.replace(/'/g, "\\'")}')">Cadastrar</button>` : ''}
                 </div>
             `;
-                        return card;
-                    }
+            return card;
+        }
 
-                    const count = Chords.getVariationCount(chordName);
-                    const starsCount = chordName.split('*').length - 1;
-                    const card = document.createElement('div');
-                    card.className = 'chord-card';
-                    card.dataset.chord = chordName;
-                    card.dataset.index = starsCount;
-                    card.dataset.editable = isEditable;
-                    card.id = `card-${chordName.replace(/[^a-zA-Z0-9]/g, '-')}`;
-                    const cleanName = chordName.replace(/\*+$/, '');
+        const count = Chords.getVariationCount(chordName);
+        const starsCount = chordName.split('*').length - 1;
+        const card = document.createElement('div');
+        card.className = 'chord-card';
+        card.dataset.chord = chordName;
+        card.dataset.index = starsCount;
+        card.dataset.editable = isEditable;
+        card.id = `card-${chordName.replace(/[^a-zA-Z0-9]/g, '-')}`;
+        const cleanName = chordName.replace(/\*+$/, '');
 
-                    let navHtml = '';
-                    if (isEditable && count > 1) {
-                        navHtml = `<div class="chord-nav">
+        let navHtml = '';
+        if (isEditable && count > 1) {
+            navHtml = `<div class="chord-nav">
                     <button type="button" class="chord-nav-btn" onclick="app.rotateChord('${chordName}', -1)">‹</button>
                     <button type="button" class="chord-nav-btn" onclick="app.rotateChord('${chordName}', 1)">›</button>
                 </div>`;
-                    }
+        }
 
-                    // Botões de ação (apenas se logado e for modo editável)
-                    let actionsBtn = '';
-                    const defaultIndex = 0;
-                    if (app.state.user && isEditable) {
-                        actionsBtn = `
+        // Botões de ação (apenas se logado e for modo editável)
+        let actionsBtn = '';
+        const defaultIndex = 0;
+        if (app.state.user && isEditable) {
+            actionsBtn = `
                 <div class="chord-card-actions">
                     <button type="button" class="btn-chord-action" title="Editar Acorde/Variação" onclick="event.stopPropagation(); app.openChordCreator('${chordName.replace(/'/g, "\\'")}', ${defaultIndex})">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
@@ -2406,308 +2513,308 @@ const app = {
                     </button>
                 </div>
             `;
-                    }
+        }
 
-                    card.innerHTML = `
+        card.innerHTML = `
             <div class="chord-name">${cleanName}</div>
             <div class="chord-svg-container">${svg}</div>
             ${navHtml}
             ${actionsBtn}
         `;
-                    return card;
-                },
+        return card;
+    },
 
-                confirmDeleteChord: async (chordName) => {
-                    const cardId = `card-${chordName.replace(/[^a-zA-Z0-9]/g, '-')}`;
-                    const card = document.getElementById(cardId);
-                    const index = parseInt(card.dataset.index || 0);
-                    const variations = Chords.dict[chordName];
-                    const isArray = Array.isArray(variations);
-                    const count = variations ? (isArray ? variations.length : 1) : 0;
+    confirmDeleteChord: async (chordName) => {
+        const cardId = `card-${chordName.replace(/[^a-zA-Z0-9]/g, '-')}`;
+        const card = document.getElementById(cardId);
+        const index = parseInt(card.dataset.index || 0);
+        const variations = Chords.dict[chordName];
+        const isArray = Array.isArray(variations);
+        const count = variations ? (isArray ? variations.length : 1) : 0;
 
-                    let title = 'Excluir Acorde';
-                    const cleanName = chordName.replace(/\*+$/, '');
-                    let content = `Deseja excluir o acorde <strong>${cleanName}</strong>?`;
+        let title = 'Excluir Acorde';
+        const cleanName = chordName.replace(/\*+$/, '');
+        let content = `Deseja excluir o acorde <strong>${cleanName}</strong>?`;
 
-                    if (count > 1) {
-                        title = 'Excluir Variação';
-                        content = `Deseja excluir esta variação (posição) do acorde <strong>${cleanName}</strong>? As outras variações deste acorde permanecerão salvas.`;
-                    }
+        if (count > 1) {
+            title = 'Excluir Variação';
+            content = `Deseja excluir esta variação (posição) do acorde <strong>${cleanName}</strong>? As outras variações deste acorde permanecerão salvas.`;
+        }
 
-                    const res = await app.modal({
-                        title: title,
-                        content: content,
-                        confirmText: 'Confirmar Exclusão',
-                        cancelText: 'Cancelar'
-                    });
+        const res = await app.modal({
+            title: title,
+            content: content,
+            confirmText: 'Confirmar Exclusão',
+            cancelText: 'Cancelar'
+        });
 
-                    if (res) {
-                        try {
-                            if (count > 1) {
-                                const newVariations = isArray ? [...variations] : [variations];
-                                newVariations.splice(index, 1);
+        if (res) {
+            try {
+                if (count > 1) {
+                    const newVariations = isArray ? [...variations] : [variations];
+                    newVariations.splice(index, 1);
 
-                                if (newVariations.length === 0) {
-                                    delete Chords.dict[chordName];
-                                    await app.db.ref('custom_chords/' + app.getChordId(chordName)).remove();
-                                } else {
-                                    await app.db.ref('custom_chords/' + app.getChordId(chordName)).set({
-                                        name: chordName,
-                                        variations: newVariations,
-                                        updatedAt: firebase.database.ServerValue.TIMESTAMP
-                                    });
-                                    Chords.dict[chordName] = newVariations;
-                                }
-                            } else {
-                                await app.db.ref('custom_chords/' + app.getChordId(chordName)).remove();
-                                delete Chords.dict[chordName];
-                            }
-
-                            app.showToast('Excluído com sucesso!');
-                            if (typeof app.loadLibrary === 'function') app.loadLibrary(); // Reload if exists
-                        } catch (e) {
-                            console.error(e);
-                            app.showToast('Erro ao excluir.');
-                        }
-                    }
-                },
-
-                rotateChord: (chordName, direction) => {
-                    const cardId = `card-${chordName.replace(/[^a-zA-Z0-9]/g, '-')}`;
-                    const card = document.getElementById(cardId);
-                    if (!card) return;
-
-                    const isEditable = card.dataset.editable === 'true';
-                    const textarea = document.getElementById('edit-content');
-
-                    let index = parseInt(card.dataset.index || 0);
-                    const count = Chords.getVariationCount(chordName);
-                    const newIndex = (index + direction + count) % count;
-
-                    if (isEditable && textarea) {
-                        // Sincronizar com o texto: converter índice em asteriscos
-                        const baseName = chordName.replace(/\*+$/, '');
-                        let newChordName = baseName;
-                        for (let i = 0; i < newIndex; i++) newChordName += '*';
-
-                        // Escapar caracteres especiais para o Regex (como #, b, /)
-                        const escapedOld = chordName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                        const regex = new RegExp('\\[' + escapedOld + '\\]', 'g');
-
-                        const oldContent = textarea.value;
-                        const newContent = oldContent.replace(regex, `[${newChordName}]`);
-
-                        if (oldContent !== newContent) {
-                            textarea.value = newContent;
-                            // O updateEditorPreview (chamado pelo oninput ou manualmente) vai cuidar de atualizar a UI
-                            app.updateEditorPreview();
-                            app.showToast(`Variação de ${baseName} atualizada na cifra!`);
-                            return; // Interrompe pois o updateEditorPreview já redesenhou tudo
-                        }
-                    }
-
-                    // Caso não seja editável ou falhe a sincronização, apenas atualiza o SVG localmente
-                    card.dataset.index = newIndex;
-                    const newSvg = Chords.render(chordName, newIndex);
-                    const svgContainer = card.querySelector('.chord-svg-container');
-                    if (svgContainer) svgContainer.innerHTML = newSvg;
-
-                    const editBtn = card.querySelector('.btn-chord-action[title*="Editar"]');
-                    if (editBtn && isEditable) {
-                        editBtn.setAttribute('onclick', `event.stopPropagation(); app.openChordCreator('${chordName.replace(/'/g, "\\'")}', ${newIndex})`);
-                    }
-                },
-
-                loadLibrary: () => {
-                    const container = document.getElementById('library-list');
-                    if (!container) return;
-                    container.innerHTML = '';
-                    Object.keys(Chords.dict).sort().forEach(chordName => {
-                        const card = app.createChordCard(chordName, true);
-                        if (card) {
-                            card.style.width = '160px';
-                            container.appendChild(card);
-                        }
-                    });
-                },
-
-                openChordSelector: () => {
-                    document.getElementById('chord-selector-modal').style.display = 'flex';
-                    app.renderChordBases();
-                },
-
-                closeChordSelector: () => {
-                    document.getElementById('chord-selector-modal').style.display = 'none';
-                },
-
-                renderChordBases: () => {
-                    const basesContainer = document.getElementById('chord-bases');
-                    basesContainer.innerHTML = '';
-                    const allChords = Object.keys(Chords.dict).sort();
-                    const roots = new Set(allChords.map(c => {
-                        if (c.length > 1 && (c[1] === '#' || c[1] === 'b')) return c.substring(0, 2);
-                        return c.substring(0, 1);
-                    }));
-                    roots.forEach(root => {
-                        const btn = document.createElement('button');
-                        btn.className = 'btn btn-outline';
-                        btn.innerText = root;
-                        btn.style.minWidth = '40px';
-                        btn.onclick = () => app.renderChordVariationsForRoot(root);
-                        basesContainer.appendChild(btn);
-                    });
-                },
-
-                renderChordVariationsForRoot: (root) => {
-                    const container = document.getElementById('chord-variations');
-                    container.innerHTML = '';
-                    const allChords = Object.keys(Chords.dict).filter(c => c.startsWith(root));
-                    allChords.forEach(chordName => {
-                        const variations = Chords.dict[chordName];
-                        if (!Array.isArray(variations)) return;
-                        variations.forEach((v, index) => {
-                            const svg = Chords.render(chordName, index);
-                            let code = chordName;
-                            for (let i = 0; i < index; i++) code += '*';
-                            const card = document.createElement('div');
-                            card.className = 'chord-card';
-                            card.style.cursor = 'pointer';
-                            card.style.border = '1px solid var(--primary-color)';
-                            card.title = `Inserir [${code}]`;
-                            card.onclick = () => app.insertChordIntoEditor(code);
-                            card.innerHTML = `<div class="chord-name">${code}</div><div class="chord-svg-container">${svg}</div>`;
-                            container.appendChild(card);
-                        });
-                    });
-                },
-
-                insertChordIntoEditor: (code) => {
-                    const textarea = document.getElementById('edit-content');
-                    const textToInsert = `[${code}]`;
-                    if (textarea.selectionStart || textarea.selectionStart == '0') {
-                        const startPos = textarea.selectionStart;
-                        const endPos = textarea.selectionEnd;
-                        textarea.value = textarea.value.substring(0, startPos) + textToInsert + textarea.value.substring(endPos, textarea.value.length);
-                        textarea.focus();
-                        textarea.selectionStart = startPos + textToInsert.length;
-                        textarea.selectionEnd = startPos + textToInsert.length;
+                    if (newVariations.length === 0) {
+                        delete Chords.dict[chordName];
+                        await app.db.ref('custom_chords/' + app.getChordId(chordName)).remove();
                     } else {
-                        textarea.value += textToInsert;
+                        await app.db.ref('custom_chords/' + app.getChordId(chordName)).set({
+                            name: chordName,
+                            variations: newVariations,
+                            updatedAt: firebase.database.ServerValue.TIMESTAMP
+                        });
+                        Chords.dict[chordName] = newVariations;
                     }
-                    app.closeChordSelector();
-                },
+                } else {
+                    await app.db.ref('custom_chords/' + app.getChordId(chordName)).remove();
+                    delete Chords.dict[chordName];
+                }
 
-                highlightChord: (chordName) => {
-                    const cardId = `card-${chordName.replace(/[^a-zA-Z0-9]/g, '-')}`;
-                    const card = document.getElementById(cardId);
-                    if (card) {
-                        card.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-                        card.style.transition = 'all 0.3s';
-                        card.style.transform = 'scale(1.1)';
-                        card.style.boxShadow = '0 0 20px var(--primary-color)';
-                        card.style.borderColor = 'var(--primary-color)';
+                app.showToast('Excluído com sucesso!');
+                if (typeof app.loadLibrary === 'function') app.loadLibrary(); // Reload if exists
+            } catch (e) {
+                console.error(e);
+                app.showToast('Erro ao excluir.');
+            }
+        }
+    },
 
-                        setTimeout(() => {
-                            card.style.transform = 'scale(1)';
-                            card.style.boxShadow = 'var(--shadow-md)';
-                            card.style.borderColor = 'var(--border-color)';
-                        }, 1000);
-                    }
-                },
+    rotateChord: (chordName, direction) => {
+        const cardId = `card-${chordName.replace(/[^a-zA-Z0-9]/g, '-')}`;
+        const card = document.getElementById(cardId);
+        if (!card) return;
 
-                showChordPopover: (e, chordName) => {
-                    e.stopPropagation();
-                    app.hideChordPopover(); // Close previous if any
+        const isEditable = card.dataset.editable === 'true';
+        const textarea = document.getElementById('edit-content');
 
-                    const starsCount = chordName.split('*').length - 1;
-                    const cleanBase = chordName.replace(/\*+$/, '');
+        let index = parseInt(card.dataset.index || 0);
+        const count = Chords.getVariationCount(chordName);
+        const newIndex = (index + direction + count) % count;
 
-                    const svg = Chords.render(cleanBase, starsCount);
-                    if (!svg) return;
+        if (isEditable && textarea) {
+            // Sincronizar com o texto: converter índice em asteriscos
+            const baseName = chordName.replace(/\*+$/, '');
+            let newChordName = baseName;
+            for (let i = 0; i < newIndex; i++) newChordName += '*';
 
-                    const popover = document.createElement('div');
-                    popover.className = 'chord-popover';
-                    popover.id = 'floating-chord-popover';
+            // Escapar caracteres especiais para o Regex (como #, b, /)
+            const escapedOld = chordName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp('\\[' + escapedOld + '\\]', 'g');
 
-                    popover.innerHTML = `
+            const oldContent = textarea.value;
+            const newContent = oldContent.replace(regex, `[${newChordName}]`);
+
+            if (oldContent !== newContent) {
+                textarea.value = newContent;
+                // O updateEditorPreview (chamado pelo oninput ou manualmente) vai cuidar de atualizar a UI
+                app.updateEditorPreview();
+                app.showToast(`Variação de ${baseName} atualizada na cifra!`);
+                return; // Interrompe pois o updateEditorPreview já redesenhou tudo
+            }
+        }
+
+        // Caso não seja editável ou falhe a sincronização, apenas atualiza o SVG localmente
+        card.dataset.index = newIndex;
+        const newSvg = Chords.render(chordName, newIndex);
+        const svgContainer = card.querySelector('.chord-svg-container');
+        if (svgContainer) svgContainer.innerHTML = newSvg;
+
+        const editBtn = card.querySelector('.btn-chord-action[title*="Editar"]');
+        if (editBtn && isEditable) {
+            editBtn.setAttribute('onclick', `event.stopPropagation(); app.openChordCreator('${chordName.replace(/'/g, "\\'")}', ${newIndex})`);
+        }
+    },
+
+    loadLibrary: () => {
+        const container = document.getElementById('library-list');
+        if (!container) return;
+        container.innerHTML = '';
+        Object.keys(Chords.dict).sort().forEach(chordName => {
+            const card = app.createChordCard(chordName, true);
+            if (card) {
+                card.style.width = '160px';
+                container.appendChild(card);
+            }
+        });
+    },
+
+    openChordSelector: () => {
+        document.getElementById('chord-selector-modal').style.display = 'flex';
+        app.renderChordBases();
+    },
+
+    closeChordSelector: () => {
+        document.getElementById('chord-selector-modal').style.display = 'none';
+    },
+
+    renderChordBases: () => {
+        const basesContainer = document.getElementById('chord-bases');
+        basesContainer.innerHTML = '';
+        const allChords = Object.keys(Chords.dict).sort();
+        const roots = new Set(allChords.map(c => {
+            if (c.length > 1 && (c[1] === '#' || c[1] === 'b')) return c.substring(0, 2);
+            return c.substring(0, 1);
+        }));
+        roots.forEach(root => {
+            const btn = document.createElement('button');
+            btn.className = 'btn btn-outline';
+            btn.innerText = root;
+            btn.style.minWidth = '40px';
+            btn.onclick = () => app.renderChordVariationsForRoot(root);
+            basesContainer.appendChild(btn);
+        });
+    },
+
+    renderChordVariationsForRoot: (root) => {
+        const container = document.getElementById('chord-variations');
+        container.innerHTML = '';
+        const allChords = Object.keys(Chords.dict).filter(c => c.startsWith(root));
+        allChords.forEach(chordName => {
+            const variations = Chords.dict[chordName];
+            if (!Array.isArray(variations)) return;
+            variations.forEach((v, index) => {
+                const svg = Chords.render(chordName, index);
+                let code = chordName;
+                for (let i = 0; i < index; i++) code += '*';
+                const card = document.createElement('div');
+                card.className = 'chord-card';
+                card.style.cursor = 'pointer';
+                card.style.border = '1px solid var(--primary-color)';
+                card.title = `Inserir [${code}]`;
+                card.onclick = () => app.insertChordIntoEditor(code);
+                card.innerHTML = `<div class="chord-name">${code}</div><div class="chord-svg-container">${svg}</div>`;
+                container.appendChild(card);
+            });
+        });
+    },
+
+    insertChordIntoEditor: (code) => {
+        const textarea = document.getElementById('edit-content');
+        const textToInsert = `[${code}]`;
+        if (textarea.selectionStart || textarea.selectionStart == '0') {
+            const startPos = textarea.selectionStart;
+            const endPos = textarea.selectionEnd;
+            textarea.value = textarea.value.substring(0, startPos) + textToInsert + textarea.value.substring(endPos, textarea.value.length);
+            textarea.focus();
+            textarea.selectionStart = startPos + textToInsert.length;
+            textarea.selectionEnd = startPos + textToInsert.length;
+        } else {
+            textarea.value += textToInsert;
+        }
+        app.closeChordSelector();
+    },
+
+    highlightChord: (chordName) => {
+        const cardId = `card-${chordName.replace(/[^a-zA-Z0-9]/g, '-')}`;
+        const card = document.getElementById(cardId);
+        if (card) {
+            card.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+            card.style.transition = 'all 0.3s';
+            card.style.transform = 'scale(1.1)';
+            card.style.boxShadow = '0 0 20px var(--primary-color)';
+            card.style.borderColor = 'var(--primary-color)';
+
+            setTimeout(() => {
+                card.style.transform = 'scale(1)';
+                card.style.boxShadow = 'var(--shadow-md)';
+                card.style.borderColor = 'var(--border-color)';
+            }, 1000);
+        }
+    },
+
+    showChordPopover: (e, chordName) => {
+        e.stopPropagation();
+        app.hideChordPopover(); // Close previous if any
+
+        const starsCount = chordName.split('*').length - 1;
+        const cleanBase = chordName.replace(/\*+$/, '');
+
+        const svg = Chords.render(cleanBase, starsCount);
+        if (!svg) return;
+
+        const popover = document.createElement('div');
+        popover.className = 'chord-popover';
+        popover.id = 'floating-chord-popover';
+
+        popover.innerHTML = `
             <div class="chord-name">${cleanBase}</div>
             <div class="chord-svg-container">${svg}</div>
         `;
 
-                    document.body.appendChild(popover);
+        document.body.appendChild(popover);
 
-                    // Position the popover
-                    const trigger = e.currentTarget;
-                    const rect = trigger.getBoundingClientRect();
-                    const popoverRect = popover.getBoundingClientRect();
+        // Position the popover
+        const trigger = e.currentTarget;
+        const rect = trigger.getBoundingClientRect();
+        const popoverRect = popover.getBoundingClientRect();
 
-                    let top = rect.top - popoverRect.height - 10 + window.scrollY;
-                    let left = rect.left + (rect.width / 2) - (popoverRect.width / 2) + window.scrollX;
+        let top = rect.top - popoverRect.height - 10 + window.scrollY;
+        let left = rect.left + (rect.width / 2) - (popoverRect.width / 2) + window.scrollX;
 
-                    // Ajustes para bordas da tela
-                    if (left < 10) left = 10;
-                    if (left + popoverRect.width > window.innerWidth - 10) {
-                        left = window.innerWidth - popoverRect.width - 10;
-                    }
-                    if (top < window.scrollY + 10) {
-                        top = rect.bottom + 10 + window.scrollY;
-                    }
+        // Ajustes para bordas da tela
+        if (left < 10) left = 10;
+        if (left + popoverRect.width > window.innerWidth - 10) {
+            left = window.innerWidth - popoverRect.width - 10;
+        }
+        if (top < window.scrollY + 10) {
+            top = rect.bottom + 10 + window.scrollY;
+        }
 
-                    popover.style.top = top + 'px';
-                    popover.style.left = left + 'px';
-                },
+        popover.style.top = top + 'px';
+        popover.style.left = left + 'px';
+    },
 
-                hideChordPopover: () => {
-                    const existing = document.getElementById('floating-chord-popover');
-                    if (existing) existing.remove();
-                },
+    hideChordPopover: () => {
+        const existing = document.getElementById('floating-chord-popover');
+        if (existing) existing.remove();
+    },
 
-                // --- SCHOOL CONTROLLER ---
-                loadSchoolDashboard: async () => {
-                    console.log('[SCHOOL DEBUG] loadSchoolDashboard iniciado');
-                    console.log('[SCHOOL DEBUG] User:', app.state.user);
+    // --- SCHOOL CONTROLLER ---
+    loadSchoolDashboard: async () => {
+        console.log('[SCHOOL DEBUG] loadSchoolDashboard iniciado');
+        console.log('[SCHOOL DEBUG] User:', app.state.user);
 
-                    const list = document.getElementById('school-professors-list');
-                    const empty = document.getElementById('school-empty-state');
-                    const nameDisplay = document.getElementById('school-name-display');
+        const list = document.getElementById('school-professors-list');
+        const empty = document.getElementById('school-empty-state');
+        const nameDisplay = document.getElementById('school-name-display');
 
-                    console.log('[SCHOOL DEBUG] Elementos encontrados:', {
-                        list: !!list,
-                        empty: !!empty,
-                        nameDisplay: !!nameDisplay
-                    });
+        console.log('[SCHOOL DEBUG] Elementos encontrados:', {
+            list: !!list,
+            empty: !!empty,
+            nameDisplay: !!nameDisplay
+        });
 
-                    if (nameDisplay && app.state.user) nameDisplay.innerText = app.state.user.name;
+        if (nameDisplay && app.state.user) nameDisplay.innerText = app.state.user.name;
 
-                    if (!list) {
-                        console.error('[SCHOOL DEBUG] Elemento school-professors-list não encontrado!');
-                        return;
-                    }
+        if (!list) {
+            console.error('[SCHOOL DEBUG] Elemento school-professors-list não encontrado!');
+            return;
+        }
 
-                    list.innerHTML = '<tr><td colspan="5" class="text-center py-4">Carregando...</td></tr>';
+        list.innerHTML = '<tr><td colspan="5" class="text-center py-4">Carregando...</td></tr>';
 
-                    try {
-                        const res = await fetch(`${app.API_URL}/school/professors`, {
-                            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-                        });
-                        if (!res.ok) throw new Error('Falha ao carregar');
-                        const professors = await res.json();
+        try {
+            const res = await fetch(`${app.API_URL}/school/professors`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            if (!res.ok) throw new Error('Falha ao carregar');
+            const professors = await res.json();
 
-                        list.innerHTML = '';
-                        if (professors.length === 0) {
-                            empty.classList.remove('hidden');
-                            return;
-                        }
-                        empty.classList.add('hidden');
+            list.innerHTML = '';
+            if (professors.length === 0) {
+                empty.classList.remove('hidden');
+                return;
+            }
+            empty.classList.add('hidden');
 
-                        professors.forEach(p => {
-                            const tr = document.createElement('tr');
-                            tr.className = 'hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors';
-                            const statusBadge = p.status === 'active'
-                                ? '<span class="px-2 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">Ativo</span>'
-                                : '<span class="px-2 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-500">Inativo</span>';
+            professors.forEach(p => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors';
+                const statusBadge = p.status === 'active'
+                    ? '<span class="px-2 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">Ativo</span>'
+                    : '<span class="px-2 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-500">Inativo</span>';
 
-                            tr.innerHTML = `
+                tr.innerHTML = `
                     <td class="px-6 py-4 font-bold text-slate-700 dark:text-white">${p.name}</td>
                     <td class="px-6 py-4">${p.email}</td>
                     <td class="px-6 py-4">${p.instrument || '-'}</td>
@@ -2719,16 +2826,16 @@ const app = {
                         </button>
                     </td>
                 `;
-                            list.appendChild(tr);
-                        });
-                    } catch (e) {
-                        console.error(e);
-                        list.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-500">Erro ao carregar dados.</td></tr>';
-                    }
-                },
+                list.appendChild(tr);
+            });
+        } catch (e) {
+            console.error(e);
+            list.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-500">Erro ao carregar dados.</td></tr>';
+        }
+    },
 
-                modalAddProfessor: () => {
-                    const content = `
+    modalAddProfessor: () => {
+        const content = `
             <div class="space-y-4 text-left">
                 <div>
                     <label class="block text-sm font-bold mb-1">Nome Completo</label>
@@ -2749,326 +2856,326 @@ const app = {
             </div>
         `;
 
-                    app.modal({
-                        title: 'Novo Professor',
-                        content: content,
-                        confirmText: 'Criar Professor',
-                        onConfirm: async () => {
-                            const name = document.getElementById('new-prof-name').value;
-                            const email = document.getElementById('new-prof-email').value;
-                            const password = document.getElementById('new-prof-pass').value;
-                            const instrument = document.getElementById('new-prof-inst').value;
+        app.modal({
+            title: 'Novo Professor',
+            content: content,
+            confirmText: 'Criar Professor',
+            onConfirm: async () => {
+                const name = document.getElementById('new-prof-name').value;
+                const email = document.getElementById('new-prof-email').value;
+                const password = document.getElementById('new-prof-pass').value;
+                const instrument = document.getElementById('new-prof-inst').value;
 
-                            if (!email || !password || !name) return alert('Campos obrigatórios: Nome, Email, Senha.');
+                if (!email || !password || !name) return alert('Campos obrigatórios: Nome, Email, Senha.');
 
-                            try {
-                                const res = await fetch(`${app.API_URL}/school/professors`, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                                    body: JSON.stringify({ name, email, password, instrument })
-                                });
-                                if (!res.ok) {
-                                    const err = await res.json();
-                                    throw new Error(err.message || 'Erro ao criar');
-                                }
-                                app.showToast('Professor criado com sucesso!');
-                                app.loadSchoolDashboard();
-                            } catch (e) {
-                                alert('Erro: ' + e.message);
-                            }
-                        }
+                try {
+                    const res = await fetch(`${app.API_URL}/school/professors`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                        body: JSON.stringify({ name, email, password, instrument })
                     });
-                },
-
-                toggleProfessorStatus: async (id, status) => {
-                    if (!confirm(`Deseja realmente definir este professor como ${status}?`)) return;
-                    try {
-                        const res = await fetch(`${app.API_URL}/school/professors/${id}`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                            body: JSON.stringify({ status })
-                        });
-                        if (res.ok) {
-                            app.showToast('Status atualizado!');
-                            app.loadSchoolDashboard();
-                        } else {
-                            alert('Erro ao atualizar status.');
-                        }
-                    } catch (e) {
-                        console.error(e);
+                    if (!res.ok) {
+                        const err = await res.json();
+                        throw new Error(err.message || 'Erro ao criar');
                     }
-                },
+                    app.showToast('Professor criado com sucesso!');
+                    app.loadSchoolDashboard();
+                } catch (e) {
+                    alert('Erro: ' + e.message);
+                }
+            }
+        });
+    },
 
-                // --- AUTOSCROLL ---
-                scrollState: {
-                    active: false,
-                    speed: 30,
-                    lastTime: 0,
-                    accumulator: 0
-                },
+    toggleProfessorStatus: async (id, status) => {
+        if (!confirm(`Deseja realmente definir este professor como ${status}?`)) return;
+        try {
+            const res = await fetch(`${app.API_URL}/school/professors/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                body: JSON.stringify({ status })
+            });
+            if (res.ok) {
+                app.showToast('Status atualizado!');
+                app.loadSchoolDashboard();
+            } else {
+                alert('Erro ao atualizar status.');
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    },
 
-                toggleScroll: () => {
-                    app.scrollState.active = !app.scrollState.active;
-                    const btn = document.getElementById('btn-scroll-toggle');
-                    const iconPlay = document.getElementById('icon-play');
-                    const iconPause = document.getElementById('icon-pause');
-                    if (app.scrollState.active) {
-                        app.scrollState.lastTime = performance.now();
-                        app.scrollState.accumulator = 0;
-                        iconPlay.style.display = 'none';
-                        iconPause.style.display = 'block';
-                        btn.classList.add('btn-primary');
+    // --- AUTOSCROLL ---
+    scrollState: {
+        active: false,
+        speed: 30,
+        lastTime: 0,
+        accumulator: 0
+    },
 
-                        // Auto-scroll to Strumming/Content if at top
-                        const diff = window.scrollY; // Current scroll
-                        if (diff < 300) { // Only if user is near the top
-                            setTimeout(() => {
-                                const strum = document.getElementById('view-strumming-container');
-                                const content = document.getElementById('view-content');
-                                const target = (strum && strum.style.display !== 'none') ? strum : content;
+    toggleScroll: () => {
+        app.scrollState.active = !app.scrollState.active;
+        const btn = document.getElementById('btn-scroll-toggle');
+        const iconPlay = document.getElementById('icon-play');
+        const iconPause = document.getElementById('icon-pause');
+        if (app.scrollState.active) {
+            app.scrollState.lastTime = performance.now();
+            app.scrollState.accumulator = 0;
+            iconPlay.style.display = 'none';
+            iconPause.style.display = 'block';
+            btn.classList.add('btn-primary');
 
-                                if (target) {
-                                    // Scroll com offset para não colar no header
-                                    const headerHeight = document.querySelector('header').offsetHeight || 80;
-                                    const targetPos = target.offsetTop - headerHeight - 20;
-                                    window.scrollTo({ top: targetPos, behavior: 'auto' });
-                                }
-                            }, 300); // Increased delay for mobile robustness
-                        }
+            // Auto-scroll to Strumming/Content if at top
+            const diff = window.scrollY; // Current scroll
+            if (diff < 300) { // Only if user is near the top
+                setTimeout(() => {
+                    const strum = document.getElementById('view-strumming-container');
+                    const content = document.getElementById('view-content');
+                    const target = (strum && strum.style.display !== 'none') ? strum : content;
 
-                        requestAnimationFrame(app.scrollLoop);
-                    } else {
-                        iconPlay.style.display = 'block';
-                        iconPause.style.display = 'none';
-                        btn.classList.add('btn-primary');
-                        // Limpa countdown se existir
-                        if (app.scrollState.currentInterval) {
-                            clearInterval(app.scrollState.currentInterval);
-                            app.scrollState.currentInterval = null;
-                        }
-                        const div = document.getElementById('loop-countdown');
-                        if (div) div.style.display = 'none';
+                    if (target) {
+                        // Scroll com offset para não colar no header
+                        const headerHeight = document.querySelector('header').offsetHeight || 80;
+                        const targetPos = target.offsetTop - headerHeight - 20;
+                        window.scrollTo({ top: targetPos, behavior: 'auto' });
                     }
-                },
+                }, 300); // Increased delay for mobile robustness
+            }
 
-                scrollLoop: (currentTime) => {
-                    if (!app.scrollState.active) return;
-                    if (!app.state.currentCifra) return;
-                    let deltaTime = currentTime - app.scrollState.lastTime;
-                    if (deltaTime > 100) deltaTime = 100;
-                    app.scrollState.lastTime = currentTime;
+            requestAnimationFrame(app.scrollLoop);
+        } else {
+            iconPlay.style.display = 'block';
+            iconPause.style.display = 'none';
+            btn.classList.add('btn-primary');
+            // Limpa countdown se existir
+            if (app.scrollState.currentInterval) {
+                clearInterval(app.scrollState.currentInterval);
+                app.scrollState.currentInterval = null;
+            }
+            const div = document.getElementById('loop-countdown');
+            if (div) div.style.display = 'none';
+        }
+    },
 
-                    // Choose speed based on device width (600px matches checkLoop logic)
-                    const isMobile = window.innerWidth <= 600;
-                    const speedVal = isMobile
-                        ? (app.state.currentCifra.scrollSpeedMobile || app.state.currentCifra.scrollSpeed || 30)
-                        : (app.state.currentCifra.scrollSpeed || 30);
+    scrollLoop: (currentTime) => {
+        if (!app.scrollState.active) return;
+        if (!app.state.currentCifra) return;
+        let deltaTime = currentTime - app.scrollState.lastTime;
+        if (deltaTime > 100) deltaTime = 100;
+        app.scrollState.lastTime = currentTime;
 
-                    const pixelsPerSecond = 1.2 + (speedVal * 0.8);
-                    const pixelsToScroll = (pixelsPerSecond * deltaTime) / 1000;
-                    app.scrollState.accumulator += pixelsToScroll;
-                    if (app.scrollState.accumulator >= 1) {
-                        const integers = Math.floor(app.scrollState.accumulator);
-                        window.scrollBy(0, integers);
-                        app.scrollState.accumulator -= integers;
+        // Choose speed based on device width (600px matches checkLoop logic)
+        const isMobile = window.innerWidth <= 600;
+        const speedVal = isMobile
+            ? (app.state.currentCifra.scrollSpeedMobile || app.state.currentCifra.scrollSpeed || 30)
+            : (app.state.currentCifra.scrollSpeed || 30);
 
-                        // Check if end of page reached
-                        if ((window.innerHeight + window.scrollY) >= (document.documentElement.scrollHeight - 2)) {
-                            app.toggleScroll();
-                            return;
-                        }
-                    }
-                    app.checkTriggers();
+        const pixelsPerSecond = 1.2 + (speedVal * 0.8);
+        const pixelsToScroll = (pixelsPerSecond * deltaTime) / 1000;
+        app.scrollState.accumulator += pixelsToScroll;
+        if (app.scrollState.accumulator >= 1) {
+            const integers = Math.floor(app.scrollState.accumulator);
+            window.scrollBy(0, integers);
+            app.scrollState.accumulator -= integers;
+
+            // Check if end of page reached
+            if ((window.innerHeight + window.scrollY) >= (document.documentElement.scrollHeight - 2)) {
+                app.toggleScroll();
+                return;
+            }
+        }
+        app.checkTriggers();
+        requestAnimationFrame(app.scrollLoop);
+    },
+
+    checkTriggers: () => {
+        app.checkPause();
+    },
+
+    checkPause: () => {
+        const pauses = document.querySelectorAll('.pause-trigger:not([data-executed="true"])');
+
+        pauses.forEach(trigger => {
+            const rect = trigger.getBoundingClientRect();
+            // Trigger pause if it reaches middle of screen (or near it)
+            const triggerPoint = window.innerHeight / 2;
+
+            if (rect.top <= triggerPoint && rect.top > 0) {
+                console.log('Detectada pausa no meio do scroll...');
+                trigger.setAttribute('data-executed', 'true');
+
+                const isMobile = window.innerWidth <= 600;
+
+                const getDelay = (el) => {
+                    if (isMobile) return parseInt(el.dataset.delayMobile || el.dataset.delay || -1);
+                    return parseInt(el.dataset.delay || -1);
+                };
+
+                let delaySeconds = getDelay(trigger);
+
+                if (delaySeconds <= 0) return;
+
+                app.scrollState.active = false; // Pause
+                app.startCountdown(delaySeconds, 'Pausado em', () => {
+                    app.scrollState.active = true;
+                    app.scrollState.lastTime = performance.now();
                     requestAnimationFrame(app.scrollLoop);
-                },
+                });
+            }
+        });
+    },
 
-                checkTriggers: () => {
-                    app.checkPause();
-                },
+    startCountdown: (seconds, label, onComplete) => {
+        const div = document.getElementById('loop-countdown');
+        const span = document.getElementById('loop-seconds');
+        if (!div || !span) return;
 
-                checkPause: () => {
-                    const pauses = document.querySelectorAll('.pause-trigger:not([data-executed="true"])');
+        let remaining = seconds;
+        div.style.display = 'block';
+        div.innerHTML = `${label} < span id = "loop-seconds" > ${remaining}</span > s...`;
 
-                    pauses.forEach(trigger => {
-                        const rect = trigger.getBoundingClientRect();
-                        // Trigger pause if it reaches middle of screen (or near it)
-                        const triggerPoint = window.innerHeight / 2;
+        const interval = setInterval(() => {
+            remaining--;
+            const s = document.getElementById('loop-seconds');
+            if (s) s.innerText = remaining;
 
-                        if (rect.top <= triggerPoint && rect.top > 0) {
-                            console.log('Detectada pausa no meio do scroll...');
-                            trigger.setAttribute('data-executed', 'true');
+            if (remaining <= 0) {
+                clearInterval(interval);
+                div.style.display = 'none';
+                if (onComplete) onComplete();
+            }
+        }, 1000);
 
-                            const isMobile = window.innerWidth <= 600;
+        // Armazenar o intervalo para poder cancelar se o usuário parar o scroll manualmente
+        app.scrollState.currentInterval = interval;
+    },
 
-                            const getDelay = (el) => {
-                                if (isMobile) return parseInt(el.dataset.delayMobile || el.dataset.delay || -1);
-                                return parseInt(el.dataset.delay || -1);
-                            };
+    // --- CHORD CREATOR ---
+    openChordCreator: async (prefilledName = '', editIndex = -1) => {
+        let chordData = {
+            name: prefilledName,
+            p: [100, 100, 100, 100, 100, 100], // 100 = nada definido
+            bar: 0,
+            noBarLine: false
+        };
 
-                            let delaySeconds = getDelay(trigger);
+        // Se estiver editando, carregar dados existentes
+        if (editIndex !== -1 && Chords.dict[prefilledName]) {
+            const variations = Chords.dict[prefilledName];
+            const v = Array.isArray(variations) ? variations[editIndex] : variations;
+            if (v) {
+                // Converter p absoluta para p relativa ao grid (1-5)
+                const bar = v.bar || 0;
+                chordData.bar = bar;
+                chordData.noBarLine = v.noBarLine || false;
+                chordData.p = v.p.map(val => {
+                    if (val <= 0) return val; // 0 ou -1
+                    return val - (bar > 0 ? bar - 1 : 0);
+                });
+            }
+        }
 
-                            if (delaySeconds <= 0) return;
+        const renderFretboard = (targetId) => {
+            const container = document.getElementById(targetId);
+            container.innerHTML = '';
 
-                            app.scrollState.active = false; // Pause
-                            app.startCountdown(delaySeconds, 'Pausado em', () => {
-                                app.scrollState.active = true;
-                                app.scrollState.lastTime = performance.now();
-                                requestAnimationFrame(app.scrollLoop);
-                            });
-                        }
-                    });
-                },
+            // Dimensões do Editor (1.5x o card original)
+            const scale = 1.5;
+            const w = 100 * scale;
+            const h = 120 * scale;
+            const m = 15 * scale;
+            const sGap = 14 * scale;
+            const fGap = 18 * scale;
 
-                startCountdown: (seconds, label, onComplete) => {
-                    const div = document.getElementById('loop-countdown');
-                    const span = document.getElementById('loop-seconds');
-                    if (!div || !span) return;
+            // Iniciar SVG
+            let svgStr = `< svg width = "${w}" height = "${h}" viewBox = "0 0 ${w} ${h}" xmlns = "http://www.w3.org/2000/svg" > `;
 
-                    let remaining = seconds;
-                    div.style.display = 'block';
-                    div.innerHTML = `${label} < span id = "loop-seconds" > ${remaining}</span > s...`;
+            // Nut
+            const barVal = parseInt(document.getElementById('chord-bar')?.value || chordData.bar);
+            const nutWidth = barVal > 0 ? 1 : 4;
+            svgStr += `< line x1 = "${m}" y1 = "${m}" x2 = "${w - m}" y2 = "${m}" stroke = "#4b5563" stroke - width="${nutWidth}" /> `;
 
-                    const interval = setInterval(() => {
-                        remaining--;
-                        const s = document.getElementById('loop-seconds');
-                        if (s) s.innerText = remaining;
+            // Strings
+            for (let i = 0; i < 6; i++) {
+                const x = m + i * sGap;
+                svgStr += `< line x1 = "${x}" y1 = "${m}" x2 = "${x}" y2 = "${h - m}" stroke = "#9ca3af" stroke - width="1" /> `;
+            }
 
-                        if (remaining <= 0) {
-                            clearInterval(interval);
-                            div.style.display = 'none';
-                            if (onComplete) onComplete();
-                        }
-                    }, 1000);
+            // Frets
+            for (let i = 1; i <= 5; i++) {
+                const y = m + i * fGap;
+                svgStr += `< line x1 = "${m}" y1 = "${y}" x2 = "${w - m}" y2 = "${y}" stroke = "#9ca3af" stroke - width="1" /> `;
+            }
 
-                    // Armazenar o intervalo para poder cancelar se o usuário parar o scroll manualmente
-                    app.scrollState.currentInterval = interval;
-                },
+            // Status Row (O/X)
+            chordData.p.forEach((fret, sIndex) => {
+                const x = m + sIndex * sGap;
+                if (fret === -1) {
+                    svgStr += `< text x = "${x}" y = "${m - 7}" text - anchor="middle" fill = "#ef4444" font - size="16" font - family="sans-serif" >×</text > `;
+                } else if (fret === 0) {
+                    svgStr += `< circle cx = "${x}" cy = "${m - 10}" r = "4.5" stroke = "#059669" stroke - width="2" fill = "none" /> `;
+                }
+            });
 
-                // --- CHORD CREATOR ---
-                openChordCreator: async (prefilledName = '', editIndex = -1) => {
-                    let chordData = {
-                        name: prefilledName,
-                        p: [100, 100, 100, 100, 100, 100], // 100 = nada definido
-                        bar: 0,
-                        noBarLine: false
-                    };
+            // Barre (Pestana)
+            const noBarLine = document.getElementById('chord-no-bar')?.checked;
+            if (barVal > 0) {
+                const y = m + (1 * fGap) - (fGap / 2);
+                if (!noBarLine) {
+                    svgStr += `< rect x = "${m - 3}" y = "${y - 6}" width = "${w - 2 * m + 6}" height = "12" rx = "3" fill = "#059669" /> `;
+                }
+                svgStr += `< text x = "0" y = "${y + 6}" fill = "#4b5563" font - size="14" font - family="sans-serif" font - weight="bold" > ${barVal}ª</text > `;
+            }
 
-                    // Se estiver editando, carregar dados existentes
-                    if (editIndex !== -1 && Chords.dict[prefilledName]) {
-                        const variations = Chords.dict[prefilledName];
-                        const v = Array.isArray(variations) ? variations[editIndex] : variations;
-                        if (v) {
-                            // Converter p absoluta para p relativa ao grid (1-5)
-                            const bar = v.bar || 0;
-                            chordData.bar = bar;
-                            chordData.noBarLine = v.noBarLine || false;
-                            chordData.p = v.p.map(val => {
-                                if (val <= 0) return val; // 0 ou -1
-                                return val - (bar > 0 ? bar - 1 : 0);
-                            });
-                        }
-                    }
+            // Fingers
+            chordData.p.forEach((fret, sIndex) => {
+                if (fret > 0 && fret <= 5) {
+                    const x = m + sIndex * sGap;
+                    const y = m + (fret * fGap) - (fGap / 2);
+                    // Não desenha se houver pestana na casa 1 (simplificação visual do card), A MENOS que noBarLine esteja marcado
+                    if (barVal > 0 && fret === 1 && !noBarLine) return;
+                    svgStr += `< circle cx = "${x}" cy = "${y}" r = "7.5" fill = "#059669" /> `;
+                }
+            });
 
-                    const renderFretboard = (targetId) => {
-                        const container = document.getElementById(targetId);
-                        container.innerHTML = '';
+            svgStr += `</svg > `;
 
-                        // Dimensões do Editor (1.5x o card original)
-                        const scale = 1.5;
-                        const w = 100 * scale;
-                        const h = 120 * scale;
-                        const m = 15 * scale;
-                        const sGap = 14 * scale;
-                        const fGap = 18 * scale;
+            const interactiveWrap = document.createElement('div');
+            interactiveWrap.className = 'fretboard-interactive';
+            interactiveWrap.innerHTML = svgStr;
 
-                        // Iniciar SVG
-                        let svgStr = `< svg width = "${w}" height = "${h}" viewBox = "0 0 ${w} ${h}" xmlns = "http://www.w3.org/2000/svg" > `;
+            // Camada de Interatividade
+            const layer = document.createElement('div');
+            layer.className = 'interaction-layer';
+            layer.style.width = w + 'px';
+            layer.style.height = h + 'px';
 
-                        // Nut
-                        const barVal = parseInt(document.getElementById('chord-bar')?.value || chordData.bar);
-                        const nutWidth = barVal > 0 ? 1 : 4;
-                        svgStr += `< line x1 = "${m}" y1 = "${m}" x2 = "${w - m}" y2 = "${m}" stroke = "#4b5563" stroke - width="${nutWidth}" /> `;
+            for (let fret = 0; fret <= 5; fret++) {
+                for (let string = 0; string < 6; string++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'interaction-cell';
+                    cell.onclick = () => toggleFret(string, fret);
+                    layer.appendChild(cell);
+                }
+            }
+            interactiveWrap.appendChild(layer);
+            container.appendChild(interactiveWrap);
+        };
 
-                        // Strings
-                        for (let i = 0; i < 6; i++) {
-                            const x = m + i * sGap;
-                            svgStr += `< line x1 = "${x}" y1 = "${m}" x2 = "${x}" y2 = "${h - m}" stroke = "#9ca3af" stroke - width="1" /> `;
-                        }
+        const toggleFret = (string, fret) => {
+            if (fret === 0) {
+                // Ciclo: Nada -> Aberto (0) -> Abafado (-1)
+                if (chordData.p[string] === 100) chordData.p[string] = 0;
+                else if (chordData.p[string] === 0) chordData.p[string] = -1;
+                else chordData.p[string] = 100;
+            } else {
+                chordData.p[string] = (chordData.p[string] === fret) ? 100 : fret;
+            }
+            renderFretboard('chord-creator-fretboard');
+        };
 
-                        // Frets
-                        for (let i = 1; i <= 5; i++) {
-                            const y = m + i * fGap;
-                            svgStr += `< line x1 = "${m}" y1 = "${y}" x2 = "${w - m}" y2 = "${y}" stroke = "#9ca3af" stroke - width="1" /> `;
-                        }
-
-                        // Status Row (O/X)
-                        chordData.p.forEach((fret, sIndex) => {
-                            const x = m + sIndex * sGap;
-                            if (fret === -1) {
-                                svgStr += `< text x = "${x}" y = "${m - 7}" text - anchor="middle" fill = "#ef4444" font - size="16" font - family="sans-serif" >×</text > `;
-                            } else if (fret === 0) {
-                                svgStr += `< circle cx = "${x}" cy = "${m - 10}" r = "4.5" stroke = "#059669" stroke - width="2" fill = "none" /> `;
-                            }
-                        });
-
-                        // Barre (Pestana)
-                        const noBarLine = document.getElementById('chord-no-bar')?.checked;
-                        if (barVal > 0) {
-                            const y = m + (1 * fGap) - (fGap / 2);
-                            if (!noBarLine) {
-                                svgStr += `< rect x = "${m - 3}" y = "${y - 6}" width = "${w - 2 * m + 6}" height = "12" rx = "3" fill = "#059669" /> `;
-                            }
-                            svgStr += `< text x = "0" y = "${y + 6}" fill = "#4b5563" font - size="14" font - family="sans-serif" font - weight="bold" > ${barVal}ª</text > `;
-                        }
-
-                        // Fingers
-                        chordData.p.forEach((fret, sIndex) => {
-                            if (fret > 0 && fret <= 5) {
-                                const x = m + sIndex * sGap;
-                                const y = m + (fret * fGap) - (fGap / 2);
-                                // Não desenha se houver pestana na casa 1 (simplificação visual do card), A MENOS que noBarLine esteja marcado
-                                if (barVal > 0 && fret === 1 && !noBarLine) return;
-                                svgStr += `< circle cx = "${x}" cy = "${y}" r = "7.5" fill = "#059669" /> `;
-                            }
-                        });
-
-                        svgStr += `</svg > `;
-
-                        const interactiveWrap = document.createElement('div');
-                        interactiveWrap.className = 'fretboard-interactive';
-                        interactiveWrap.innerHTML = svgStr;
-
-                        // Camada de Interatividade
-                        const layer = document.createElement('div');
-                        layer.className = 'interaction-layer';
-                        layer.style.width = w + 'px';
-                        layer.style.height = h + 'px';
-
-                        for (let fret = 0; fret <= 5; fret++) {
-                            for (let string = 0; string < 6; string++) {
-                                const cell = document.createElement('div');
-                                cell.className = 'interaction-cell';
-                                cell.onclick = () => toggleFret(string, fret);
-                                layer.appendChild(cell);
-                            }
-                        }
-                        interactiveWrap.appendChild(layer);
-                        container.appendChild(interactiveWrap);
-                    };
-
-                    const toggleFret = (string, fret) => {
-                        if (fret === 0) {
-                            // Ciclo: Nada -> Aberto (0) -> Abafado (-1)
-                            if (chordData.p[string] === 100) chordData.p[string] = 0;
-                            else if (chordData.p[string] === 0) chordData.p[string] = -1;
-                            else chordData.p[string] = 100;
-                        } else {
-                            chordData.p[string] = (chordData.p[string] === fret) ? 100 : fret;
-                        }
-                        renderFretboard('chord-creator-fretboard');
-                    };
-
-                    const contentHtml = `
+        const contentHtml = `
         < div class= "chord-editor-container" >
         <input type="text" id="new-chord-name" class="modal-input" placeholder="Nome do Acorde (ex: G7M)" style="margin-bottom:0" value="${chordData.name}">
             <div id="chord-creator-fretboard"></div>
@@ -3090,90 +3197,90 @@ const app = {
         </div>
 `;
 
-                    const modalPromise = app.modal({
-                        title: 'Criar Novo Acorde',
-                        content: contentHtml,
-                        confirmText: 'Gravar Acorde',
-                        cancelText: 'Cancelar'
-                    });
+        const modalPromise = app.modal({
+            title: 'Criar Novo Acorde',
+            content: contentHtml,
+            confirmText: 'Gravar Acorde',
+            cancelText: 'Cancelar'
+        });
 
-                    // Initialize board immediately
+        // Initialize board immediately
+        renderFretboard('chord-creator-fretboard');
+
+        // Escuta mudanças nos controles para atualizar visual
+        requestAnimationFrame(() => {
+            const barInput = document.getElementById('chord-bar');
+            const noBarCheck = document.getElementById('chord-no-bar');
+            if (barInput) {
+                barInput.oninput = () => {
+                    chordData.bar = parseInt(barInput.value) || 0;
                     renderFretboard('chord-creator-fretboard');
+                };
+            }
+            if (noBarCheck) {
+                noBarCheck.onchange = () => {
+                    renderFretboard('chord-creator-fretboard');
+                };
+            }
+        });
 
-                    // Escuta mudanças nos controles para atualizar visual
-                    requestAnimationFrame(() => {
-                        const barInput = document.getElementById('chord-bar');
-                        const noBarCheck = document.getElementById('chord-no-bar');
-                        if (barInput) {
-                            barInput.oninput = () => {
-                                chordData.bar = parseInt(barInput.value) || 0;
-                                renderFretboard('chord-creator-fretboard');
-                            };
-                        }
-                        if (noBarCheck) {
-                            noBarCheck.onchange = () => {
-                                renderFretboard('chord-creator-fretboard');
-                            };
-                        }
-                    });
+        const res = await modalPromise;
 
-                    const res = await modalPromise;
+        if (res) {
+            const name = res.name || '';
+            const bar = res.bar || 0;
+            const noBarLine = res.noBar || false;
 
-                    if (res) {
-                        const name = res.name || '';
-                        const bar = res.bar || 0;
-                        const noBarLine = res.noBar || false;
+            if (!name) {
+                app.showToast('Dê um nome ao acorde!');
+                return;
+            }
 
-                        if (!name) {
-                            app.showToast('Dê um nome ao acorde!');
-                            return;
-                        }
+            // Normalizar p (100 -> -1)
+            const finalP = chordData.p.map(v => (v === 100 || v === null) ? -1 : v);
 
-                        // Normalizar p (100 -> -1)
-                        const finalP = chordData.p.map(v => (v === 100 || v === null) ? -1 : v);
+            // Adjust P if bar > 0 (nossa renderização usa p absoluta, mas guarda relativa no dict)
+            // Se bar for 3, e coloquei dedo na casa 2 do grid, a casa real é 3 + 2 - 1 = 4.
+            const adjustedP = finalP.map(v => (v > 0) ? (v + (bar > 0 ? bar - 1 : 0)) : v);
 
-                        // Adjust P if bar > 0 (nossa renderização usa p absoluta, mas guarda relativa no dict)
-                        // Se bar for 3, e coloquei dedo na casa 2 do grid, a casa real é 3 + 2 - 1 = 4.
-                        const adjustedP = finalP.map(v => (v > 0) ? (v + (bar > 0 ? bar - 1 : 0)) : v);
+            const newVariation = { p: adjustedP };
 
-                        const newVariation = { p: adjustedP };
+            if (bar > 0) {
+                newVariation.bar = bar;
+                newVariation.noBarLine = !!noBarLine; // Garante booleano explícito
+            }
 
-                        if (bar > 0) {
-                            newVariation.bar = bar;
-                            newVariation.noBarLine = !!noBarLine; // Garante booleano explícito
-                        }
+            try {
+                // Check if exists
+                let variations = Chords.dict[name] || [];
+                if (!Array.isArray(variations)) variations = [variations];
 
-                        try {
-                            // Check if exists
-                            let variations = Chords.dict[name] || [];
-                            if (!Array.isArray(variations)) variations = [variations];
-
-                            if (editIndex !== -1 && variations[editIndex]) {
-                                // Substituir existente se estiver em modo edit
-                                variations[editIndex] = newVariation;
-                            } else {
-                                // Adicionar nova variação
-                                variations.push(newVariation);
-                            }
-
-                            await app.db.ref('custom_chords/' + app.getChordId(name)).set({
-                                name: name,
-                                variations: variations,
-                                updatedAt: firebase.database.ServerValue.TIMESTAMP
-                            });
-
-                            Chords.dict[name] = variations;
-                            app.showToast('Acorde gravado com sucesso!');
-                            if (app.state.currentView === 'library') app.loadLibrary();
-                            if (app.state.currentView === 'cifra' && app.state.currentCifra) {
-                                app.loadCifra(app.state.currentCifra.id);
-                            }
-                        } catch (e) {
-                            console.error(e);
-                            app.showToast('Erro ao salvar acorde.');
-                        }
-                    }
+                if (editIndex !== -1 && variations[editIndex]) {
+                    // Substituir existente se estiver em modo edit
+                    variations[editIndex] = newVariation;
+                } else {
+                    // Adicionar nova variação
+                    variations.push(newVariation);
                 }
-            };
 
-            document.addEventListener('DOMContentLoaded', app.init);
+                await app.db.ref('custom_chords/' + app.getChordId(name)).set({
+                    name: name,
+                    variations: variations,
+                    updatedAt: firebase.database.ServerValue.TIMESTAMP
+                });
+
+                Chords.dict[name] = variations;
+                app.showToast('Acorde gravado com sucesso!');
+                if (app.state.currentView === 'library') app.loadLibrary();
+                if (app.state.currentView === 'cifra' && app.state.currentCifra) {
+                    app.loadCifra(app.state.currentCifra.id);
+                }
+            } catch (e) {
+                console.error(e);
+                app.showToast('Erro ao salvar acorde.');
+            }
+        }
+    }
+};
+
+document.addEventListener('DOMContentLoaded', app.init);

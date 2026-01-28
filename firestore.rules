@@ -1,0 +1,37 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if user is admin
+    function isAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // USERS COLLECTION
+    match /users/{userId} {
+      // Allow user to read/write their own profile
+      allow get, update, delete: if request.auth != null && request.auth.uid == userId;
+      
+      // Allow creation if authenticated (auth.uid matches new doc ID)
+      allow create: if request.auth != null && request.auth.uid == userId;
+
+      // Allow ADMINS to read (list) and write ALL users
+      allow read, write: if request.auth != null && isAdmin();
+    }
+
+    // SONGS (Cifras)
+    match /cifras/{cifraId} {
+      // Allow everyone to read
+      allow read: if true;
+      // Allow authenticated users to create/update
+      allow create, update: if request.auth != null;
+      // Allow only admins or owner to delete (simplified to auth for now)
+      allow delete: if request.auth != null;
+    }
+    
+    // Default deny for other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

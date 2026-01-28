@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Setup Admin - CifraProX</title>
+</head>
+
+<body>
+    <h1>Setup Admin User</h1>
+    <p>Creating admin user in 'cifraprox' database...</p>
+    <div id="log" style="font-family: monospace; background: #eee; padding: 10px;"></div>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+    <!-- BRIDGE: Modular SDK v10 -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+        import { getFirestore, doc, setDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+
+        const config = {
+            apiKey: "AIzaSyDcx_MKD1ug5t_tEfyhYrmFkXBhlFssfyg",
+            authDomain: "cifraprox-270126.firebaseapp.com",
+            projectId: "cifraprox-270126",
+            storageBucket: "cifraprox-270126.firebasestorage.app",
+            messagingSenderId: "901280078984",
+            appId: "1:901280078984:web:6b1354ce044279c18e933d"
+        };
+
+        const log = (msg) => {
+            document.getElementById('log').innerHTML += `<div>${msg}</div>`;
+            console.log(msg);
+        };
+
+        async function setup() {
+            try {
+                // 1. Initialize Modular App
+                const app = initializeApp(config, 'setup-admin-v10');
+                const auth = getAuth(app);
+
+                log(`Initializing Firestore for DB: 'cifraprox'...`);
+                const db = getFirestore(app, 'cifraprox'); // Target Named DB
+
+                if (db._databaseId) { // Check internal prop if possible
+                    log(`DB Target: ${JSON.stringify(db._databaseId)}`);
+                }
+
+                const email = 'cifraprox@gmail.com';
+                const password = 'projetoinfcifras';
+
+                log(`Connecting to Auth...`);
+
+                let user;
+                try {
+                    // Try Login
+                    const cred = await signInWithEmailAndPassword(auth, email, password);
+                    user = cred.user;
+                    log(`User exists! Logged in as: ${user.uid}`);
+                } catch (e) {
+                    if (e.code === 'auth/user-not-found' || e.code === 'auth/wrong-password') {
+                        // Create
+                        log(`User not found. Creating...`);
+                        const cred = await createUserWithEmailAndPassword(auth, email, password);
+                        user = cred.user;
+                        log(`User created! UID: ${user.uid}`);
+                    } else {
+                        throw e;
+                    }
+                }
+
+                // 2. Write to Named Firestore
+                log(`Writing to Firestore DB: 'cifraprox'...`);
+                const userRef = doc(db, 'users', user.uid);
+
+                await setDoc(userRef, {
+                    email: email,
+                    role: 'admin',
+                    name: 'Admin Master',
+                    createdAt: new Date().toISOString()
+                }, { merge: true });
+
+                log(`SUCCESS! User ${email} is now ADMIN in 'cifraprox'.`);
+                log(`UID: ${user.uid}`);
+
+            } catch (err) {
+                log(`ERROR: ${err.message}`);
+                console.error(err);
+            }
+        }
+
+        setup();
+    </script>
+</body>
+
+</html>

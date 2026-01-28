@@ -267,7 +267,7 @@
                         </p>
                     </div>
 
-                    <form onsubmit="app.login(event)" class="space-y-5">
+                    <form onsubmit="app.login(event); return false;" class="space-y-5">
                         <div>
                             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5"
                                 for="email">E-mail</label>
@@ -997,9 +997,30 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
+
 <!-- Scripts -->
+<!-- BRIDGE: Modular SDK para Banco Nomeado (Firestore) -->
+<script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+    import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, getDocs, onSnapshot, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+    import { getAuth, createUserWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+
+    window.connectToNamedDB = (config, dbName) => {
+        console.log(`[BRIDGE] Conectando ao Firestore: ${dbName}`);
+        const app = initializeApp(config, 'named-db-app'); // Second App Instance
+        const db = getFirestore(app, dbName);
+        return db;
+    };
+
+    // Expose Utils for app.js
+    window.firestoreUtils = {
+        doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, getDocs, onSnapshot, query, orderBy, getFirestore,
+        getAuth, createUserWithEmailAndPassword, initializeApp
+    };
+</script>
+
 <script src="chords.js?v=2"></script>
-<script src="app.js?v=2"></script>
+<script src="app.js?v=9"></script>
 
 </body>
 
