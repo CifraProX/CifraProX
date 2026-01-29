@@ -110,7 +110,10 @@ const app = {
 
             // Register Service Worker
             if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW register fail:', err));
+                // Force update check by adding version param
+                navigator.serviceWorker.register('sw.js?v=2').then(registration => {
+                    registration.update();
+                }).catch(err => console.warn('SW register fail:', err));
             }
 
             // Evento para botão voltar do navegador/celular
