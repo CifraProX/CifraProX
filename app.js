@@ -438,7 +438,7 @@ const app = {
             let userData;
             let userRole = 'student';
 
-            // HYBRID: Use Modular DB if available (cifraprox), else Compat
+            // HYBRID: Use Modular DB if available (cifraprox), else ABORT
             if (app.namedDb && window.firestoreUtils) {
                 console.log("%c [LOGIN] Usando Banco NOMEADO (Hybrid) ", "background: #059669; color: white; padding: 4px;");
                 const { doc, getDoc, setDoc, getFirestore } = window.firestoreUtils;
@@ -460,23 +460,8 @@ const app = {
                     userData = userSnap.data();
                 }
             } else {
-                console.warn("%c [LOGIN] Fallback para Banco DEFAULT (Compat). app.namedDb é: ", "background: #f59e0b; color: black;", app.namedDb);
-                // Compat Fallback
-                const userDoc = await app.db.collection('users').doc(uid).get();
-                if (!userDoc.exists) {
-                    console.warn('Perfil não encontrado. Criando perfil automaticamente...');
-                    userData = {
-                        email: email,
-                        name: email.split('@')[0],
-                        role: email === 'cifraprox@gmail.com' ? 'admin' : 'student',
-                        plan_id: 1,
-                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                        status: 'active'
-                    };
-                    await app.db.collection('users').doc(uid).set(userData);
-                } else {
-                    userData = userDoc.data();
-                }
+                // STRICT MODE: NO FALLBACK
+                throw new Error("ERRO CRÍTICO: Conexão com banco 'cifraprox' perdida no Login. Abortando para segurança.");
             }
 
             // 3. Update Session
@@ -765,14 +750,8 @@ const app = {
                     await addDoc(colRef, payload);
                 }
             } else {
-                console.warn("%c [SAVE] Fallback para DEFAULT", "background: #f59e0b; color: black;");
-                // Compat Fallback
-                if (id) {
-                    await app.db.collection('cifras').doc(id).update(payload);
-                } else {
-                    payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
-                    await app.db.collection('cifras').add(payload);
-                }
+                // STRICT MODE: NO FALLBACK
+                throw new Error("ERRO CRÍTICO: Conexão com banco 'cifraprox' perdida ao Salvar Cifra. Abortando.");
             }
 
             app.showToast('Cifra salva no Firestore!');
