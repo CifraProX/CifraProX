@@ -43,51 +43,40 @@ const app = {
             // As instruções da sua IA eram para Realtime Database, mas adaptei para Firestore.
             // Usamos o "Bridge" que criei no index.html para conectar na instância certa.
 
-            // 1. Aguardar carregamento do Bridge
+            // 1. Aguardar carregamento do Bridge (Timeout aumentado para 10s)
             let attempts = 0;
-            while (!window.connectToNamedDB && attempts < 20) {
-                await new Promise(r => setTimeout(r, 100)); // Espera 100ms
+            const maxAttempts = 100; // 100 * 100ms = 10 segundos
+
+            while (!window.connectToNamedDB && attempts < maxAttempts) {
+                if (attempts % 10 === 0) console.log(`[INIT] Aguardando Bridge... (${attempts}/${maxAttempts})`);
+                await new Promise(r => setTimeout(r, 100));
                 attempts++;
             }
 
             if (window.connectToNamedDB) {
                 try {
                     // 2. Conectar na instância "cifraprox" (Secundária)
-                    // Isso cria uma conexão isolada direto com o banco certo.
                     const namedDb = window.connectToNamedDB(app.firebaseConfig, 'cifraprox');
 
                     // 3. Shim/Adaptador
-                    // O SDK Modular retorna um objeto diferente do Compat.
-                    // Mas para queries simples (collection, get), podemos fazer um "wrapper" simples 
-                    // ou forçar o uso dele se mudarmos o código.
+                    app.db = firebase.firestore(); // Ainda precisamos da instância compat para funções legadas
 
-                    // SOLUÇÃO HÍBRIDA ROBUSTA:
-                    // O "namedDb" é Modular. O "app.db" espera Compat.
-                    // Infelizmente, misturar os dois exige reescrever as chamadas (doc().get() muda para getDoc(doc)).
-
-                    // TENTATIVA FINAL DE CONFIGURAÇÃO PURA (COMPAT):
-                    // Se o método acima for complexo demais para o código existente,
-                    // vamos tentar apenas 'firebase.firestore().settings(...)' se possível? Não.
-
-                    // VAMOS USAR O "SHIM" QUE FINGE SER O COMPAT:
-                    app.db = firebase.firestore(); // Começa com o default
-
-                    // Injetar o delegate (hack seguro para forçar o banco nomeado no objeto compat)
-                    // Injetar o delegate (hack seguro para forçar o banco nomeado no objeto compat)
                     if (namedDb) {
                         app.namedDb = namedDb; // Store for Hybrid usage
-                        console.log("%c [SUCESSO] Banco 'cifraprox' conectado e disponível em app.namedDb! ", "background: #059669; color: white; padding: 5px; font-weight: bold;");
+                        console.log("%c [SUCESSO-CRÍTICO] Conectado ao 'cifraprox'! Aplicação Segura. ", "background: #059669; color: white; padding: 10px; font-weight: bold; font-size: 14px;");
                     } else {
-                        console.warn("Bridge returned null DB.");
+                        throw new Error("Bridge retornou nulo! Abortando.");
                     }
 
                 } catch (e) {
-                    console.error("Erro ao conectar banco nomeado:", e);
-                    app.db = firebase.firestore(); // Fallback
+                    console.error("ERRO FATAL NA CONEXÃO:", e);
+                    alert("FATAL: Não foi possível conectar ao banco de dados correto. A aplicação será interrompida para evitar perda de dados. Recarregue a página.");
+                    throw e; // Stop execution
                 }
             } else {
-                console.error("Bridge não carregou. Usando banco default.");
-                app.db = firebase.firestore();
+                console.error("FATAL: Bridge (connectToNamedDB) não carregou após 10 segundos.");
+                alert("ERRO CRÍTICO: O componente de conexão (Bridge) falhou. Verifique sua internet ou tente limpar o cache.");
+                throw new Error("Bridge Timeout - Aplicação abortada para segurança dos dados.");
             }
 
             app.auth = firebase.auth();
