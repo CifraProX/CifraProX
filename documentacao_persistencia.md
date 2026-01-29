@@ -101,6 +101,7 @@ if (app.namedDb && window.firestoreUtils) {
 ### O arquivo `.firebaserc` é necessário?
 **Sim.** Ele é fundamental se você utiliza as ferramentas de linha de comando do Firebase (`firebase-tools`). Ele garante que, ao rodar comandos como `firebase deploy`, as regras de segurança e os arquivos do site sejam enviados para o projeto correto (`cifraprox-270126`).
 
+<<<<<<< HEAD
 ## 5. Guia para Replicação (Exemplo Mínimo)
 
 Para replicar esta arquitetura em um novo projeto ou em outra parte deste sistema, siga este modelo essencial:
