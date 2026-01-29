@@ -63,7 +63,7 @@ const app = {
 
                     if (namedDb) {
                         app.namedDb = namedDb; // Store for Hybrid usage
-                        console.log("%c [SUCESSO-CRÍTICO] Conectado ao 'cifraprox'! Aplicação Segura. ", "background: #059669; color: white; padding: 10px; font-weight: bold; font-size: 14px;");
+                        console.log("%c [SUCESSO] Banco 'cifraprox' conectado e disponível em app.namedDb! ", "background: #059669; color: white; padding: 5px; font-weight: bold;");
                     } else {
                         throw new Error("Bridge retornou nulo! Abortando.");
                     }
@@ -2032,7 +2032,11 @@ const app = {
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             };
 
-            await app.db.collection('users').doc(uid).set(userData);
+            if (app.namedDb && window.firestoreUtils) {
+                await window.firestoreUtils.setDoc(window.firestoreUtils.doc(app.namedDb, 'users', uid), userData);
+            } else {
+                await app.db.collection('users').doc(uid).set(userData);
+            }
 
             // 4. Update Function State
             const user = { id: uid, ...userData };
