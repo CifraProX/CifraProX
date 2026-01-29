@@ -141,6 +141,7 @@ const app = {
 
             // Carregar cifras iniciais
             app.loadCifras();
+            app.loadCustomChords();
             // Monitor de Rede (Offline)
             window.addEventListener('online', app.updateNetworkStatus);
             window.addEventListener('offline', app.updateNetworkStatus);
@@ -268,6 +269,8 @@ const app = {
             app.loadSchoolDashboard();
         } else if (view === 'classroom') {
             // Setup classroom (Timer or Init)
+        } else if (view === 'library') {
+            app.loadLibrary();
         }
     },
 
@@ -580,27 +583,46 @@ const app = {
             const musSlug = app.slugify(title);
             const url = `https://www.cifraclub.com.br/${artSlug}/${musSlug}/`;
 
-            // Proxy AllOrigins para evitar CORS
-            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+            console.log(`[IMPORT] Iniciando busca para: ${url}`);
 
-            const response = await fetch(proxyUrl);
-
-            if (!response.ok) throw new Error('Serviço de busca indisponível no momento.');
-
-            const textResponse = await response.text();
+            let response;
+            let textResponse;
             let data;
 
             try {
-                data = JSON.parse(textResponse);
-            } catch (err) {
-                if (textResponse.includes('Oops') || textResponse.includes('404')) {
-                    throw new Error('Música não encontrada. Verifique se o nome do artista e da música estão corretos no Cifra Club.');
+                // Tenta Proxy 1: AllOrigins
+                console.log(`[IMPORT] Tentando Proxy 1 (AllOrigins)...`);
+                const proxyUrl1 = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}&ts=${Date.now()}`;
+                response = await fetch(proxyUrl1);
+
+                if (response.ok) {
+                    textResponse = await response.text();
+                    data = JSON.parse(textResponse);
+                } else {
+                    throw new Error(`Proxy 1 falhou com status ${response.status}`);
                 }
-                throw new Error('Resposta inválida do servidor de busca.');
+            } catch (err1) {
+                console.warn(`[IMPORT] Proxy 1 falhou: ${err1.message}. Tentando Proxy 2...`);
+
+                try {
+                    // Tenta Proxy 2: corsproxy.io
+                    const proxyUrl2 = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+                    response = await fetch(proxyUrl2);
+
+                    if (response.ok) {
+                        const rawHtml = await response.text();
+                        data = { contents: rawHtml }; // Formato diferente do allorigins
+                    } else {
+                        throw new Error(`Proxy 2 falhou com status ${response.status}`);
+                    }
+                } catch (err2) {
+                    console.error(`[IMPORT] Ambos os proxies falharam.`);
+                    throw new Error('Não foi possível conectar aos servidores de busca. Verifique sua conexão ou tente mais tarde.');
+                }
             }
 
             if (!data || !data.contents) {
-                throw new Error('Conteúdo não encontrado. Pode ser que a URL gerada esteja incorreta.');
+                throw new Error('Conteúdo não encontrado na resposta do servidor.');
             }
 
             const parser = new DOMParser();
@@ -750,6 +772,7 @@ const app = {
             bpm: form.bpm.value || '',
             youtube: form.youtube.value || '',
             youtubeTraining: form.youtubeTraining.value || '',
+            strumming: form.strumming.value || '',
             ready: form.ready.checked,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
@@ -1107,7 +1130,7 @@ const app = {
 
             app.showToast('Cifra removida.');
             // Filter handles removal from state via snapshot listener usually, but navigate updates view
-            if (location.hash.includes('editor')) app.navigate('home');
+            if (location.hash.includes('editor') || location.hash.includes('cifra')) app.navigate('home');
         } catch (e) {
             console.error(e);
             alert('Erro ao apagar.');
@@ -1454,6 +1477,42 @@ const app = {
         return /^[A-Ga-g]/.test(clean);
     },
 
+    getChordId: (name) => {
+        if (!name) return 'unknown';
+        return name.replace(/#/g, '_sharp').replace(/\//g, '_slash').replace(/\*/g, '_star').replace(/\s+/g, '_');
+    },
+
+    loadCustomChords: async () => {
+        try {
+            console.log("%c [CHORDS] Carregando acordes customizados... ", "background: #6366f1; color: white;");
+
+            let snapshot;
+            if (app.namedDb && window.firestoreUtils) {
+                const { getDocs, collection } = window.firestoreUtils;
+                const colRef = collection(app.namedDb, 'custom_chords');
+                snapshot = await getDocs(colRef);
+
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    if (data.name && data.variations) {
+                        Chords.dict[data.name] = data.variations;
+                    }
+                });
+            } else {
+                snapshot = await app.db.collection('custom_chords').get();
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    if (data.name && data.variations) {
+                        Chords.dict[data.name] = data.variations;
+                    }
+                });
+            }
+            console.log("[CHORDS] Acordes carregados:", Object.keys(Chords.dict).length);
+        } catch (e) {
+            console.error("Erro ao carregar acordes customizados:", e);
+        }
+    },
+
     loadCifra: async (id) => {
         try {
             const doc = await app.db.collection('cifras').doc(id).get();
@@ -1625,11 +1684,10 @@ const app = {
             }
 
             // Show Actions only if logged in
-            // Actions are now in the header, handled by renderHeader call in navigate
-            // But we might need to re-render header here if we want to be sure? 
-            // Actually navigate calls renderHeader('cifra'), which checks app.state.user. 
-            // So it should be fine.
-            app.renderHeader('cifra'); // Re-run to ensure buttons appear if state matches
+            const actionsDiv = document.getElementById('view-actions');
+            if (actionsDiv) {
+                actionsDiv.style.display = app.state.user ? 'flex' : 'none';
+            }
 
         } catch (e) {
             console.error('Erro em loadCifra:', e);
@@ -2090,12 +2148,6 @@ const app = {
         }
     },
 
-    logout: () => {
-        app.state.user = null;
-        localStorage.removeItem('token');
-        app.navigate('login'); // Assuming a login page exists
-        app.showToast('Você foi desconectado.');
-    },
 
     playSetlist: async (id) => {
         const setlist = app.state.setlists.find(s => s.id === id);
@@ -2248,27 +2300,57 @@ const app = {
     // Mantendo a lógica de UI existente, apenas adaptando para não usar 'this' se possível
     // Ou usar 'app' explicitamente.
 
-    loadEditor: (cifra) => {
-        // Populate inputs with defaults for new songs
+    loadEditor: async (cifraOrId) => {
+        if (!cifraOrId) return;
+
+        let cifra = cifraOrId;
+
+        // Se for apenas o ID (string), buscar no banco
+        if (typeof cifraOrId === 'string') {
+            try {
+                let docSnap;
+                if (app.namedDb && window.firestoreUtils) {
+                    const { doc, getDoc } = window.firestoreUtils;
+                    docSnap = await getDoc(doc(app.namedDb, 'cifras', cifraOrId));
+                } else {
+                    docSnap = await app.db.collection('cifras').doc(cifraOrId).get();
+                }
+
+                if (docSnap && (typeof docSnap.exists === 'function' ? docSnap.exists() : docSnap.exists)) {
+                    cifra = { id: docSnap.id, ...docSnap.data() };
+                } else {
+                    app.showToast('Cifra não encontrada.');
+                    app.navigate('home');
+                    return;
+                }
+            } catch (e) {
+                console.error('Erro ao carregar editor:', e);
+                app.showToast('Erro ao carregar os dados da cifra.');
+                return;
+            }
+        }
+
+        // Reset Tabs do Editor
+        app.setEditorTab('lyrics');
+
+        // Preencher inputs
         document.getElementById('edit-id').value = cifra.id || '';
         document.getElementById('edit-title').value = cifra.title || '';
         document.getElementById('edit-artist').value = cifra.artist || '';
         document.getElementById('edit-content').value = cifra.content || '[p|0|0|]\n\n';
-        document.getElementById('edit-scrollSpeed').value = cifra.scrollSpeed || '1';
-        document.getElementById('edit-scrollSpeedMobile').value = cifra.scrollSpeedMobile || cifra.scrollSpeed || '1';
         document.getElementById('edit-tom').value = cifra.tom || '';
         document.getElementById('edit-capo').value = cifra.capo || '';
         document.getElementById('edit-genre').value = cifra.genre || '';
         document.getElementById('edit-bpm').value = cifra.bpm || '';
         document.getElementById('edit-youtube').value = cifra.youtube || '';
-        document.getElementById('edit-youtubeTraining').value = cifra.youtubeTraining || '';
+        document.getElementById('edit-youtube-training').value = cifra.youtubeTraining || '';
+
         const strum = cifra.strumming || '';
         document.getElementById('edit-strumming').value = strum;
-        document.getElementById('edit-ready').checked = !!cifra.ready;
+        document.getElementById('edit-ready').checked = cifra.ready !== false;
         document.getElementById('edit-tabs').value = cifra.tabs || '';
 
         app.updateStrumPreview(strum);
-        app.updateEditorChords();
         app.updateEditorPreview();
     },
 
@@ -2312,37 +2394,88 @@ const app = {
         // Sanitizar
         content = content.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-        // Pause Marker - Syntax: [p|tabletPC|mobile|]
-        content = content.replace(/\[p\|(\d*)(?:\|(\d*))?\|?\]\n?/g, (match, d1, d2) => {
-            const delayTabletPC = (d1 !== undefined && d1 !== '') ? parseInt(d1) : -1;
-            const delayMobile = (d2 !== undefined && d2 !== '') ? parseInt(d2) : delayTabletPC;
+        // 1. Chords - Standard Regex (No Smart)
+        // Process chords FIRST to avoid matching bracket attributes of pause markers later
+        const formattedChords = content.replace(/\[([^\]]+)\]/g, (match, chord) => {
+            if (chord.startsWith('p|') || chord.includes('|')) return match; // Ignore pause markers and others with |
 
-            const deskTxt = delayTabletPC === -1 ? 'Imediato' : (delayTabletPC === 0 ? 'Desativado' : delayTabletPC + 's');
-            return `<div style="border-top: 1px dashed #10b981; color:#10b981; font-size:0.75rem; padding: 1px 0; margin-bottom: 2px;">⏸ Pausa (${deskTxt})</div>`;
-        });
-
-        // Remove Loop Markers if present
-        content = content.replace(/\[\|(\d*)(?:\|(\d*))?(?:\|(\d*))?\|?\]/g, '');
-        content = content.replace(/\[\.\|(\d*)(?:\|(\d*))?(?:\|(\d*))?\|?\.\]/g, '');
-
-        // Chords - Standard Regex (No Smart)
-        const formatted = content.replace(/\[([^\]]+)\]/g, (match, chord) => {
-            if (match.includes('Loop')) return match;
-            if (match.includes('<')) return match; // Already processed
             const fullChordName = chord;
             const cleanBase = chord.replace(/\*+$/, '');
 
-            const openB = '<span class="chord-bracket">[</span>';
-            const closeB = '<span class="chord-bracket">]</span>';
+            const openB = '<span class="text-slate-300 dark:text-slate-600 font-normal">[</span>';
+            const closeB = '<span class="text-slate-300 dark:text-slate-600 font-normal">]</span>';
 
             if (app.isActualChord(cleanBase)) {
-                return `${openB}<b class="interactive-chord" style="color:var(--chord-color); cursor:pointer;" onclick="app.showChordPopover(event, '${fullChordName}')">${fullChordName}</b>${closeB}`;
+                return `${openB}<b class="interactive-chord text-primary cursor-pointer hover:underline" onclick="app.showChordPopover(event, '${fullChordName}')">${fullChordName}</b>${closeB}`;
             } else {
-                return `${openB}<b class="section-marker" style="color:var(--primary-color); font-weight:700;">${fullChordName}</b>${closeB}`;
+                return `${openB}<b class="text-blue-500 font-bold">${fullChordName}</b>${closeB}`;
             }
         });
 
-        preview.innerHTML = formatted;
+        // 2. Pause Marker - Syntax: [p|tabletPC|mobile|] - Process AFTER chords
+        content = formattedChords.replace(/\[p\|(\d*)(?:\|(\d*))?\|?\]\n?/g, (match, d1, d2) => {
+            const delayTabletPC = (d1 !== undefined && d1 !== '') ? parseInt(d1) : -1;
+
+            let deskTxt = "Pausa";
+            if (delayTabletPC === 0) deskTxt = "Pausa Desativada";
+            else if (delayTabletPC > 0) deskTxt = `Pausa (${delayTabletPC}s)`;
+            else deskTxt = "Pausa Automática";
+
+            return `<div class="bg-emerald-500/10 text-emerald-500 text-[10px] font-bold px-2 py-1 rounded border border-emerald-500/20 my-1 inline-block">⏸ ${deskTxt}</div>\n`;
+        });
+
+        // 3. Remove Loop Markers if present
+        content = content.replace(/\[\|(\d*)(?:\|(\d*))?(?:\|(\d*))?\|?\]/g, '');
+        content = content.replace(/\[\.\|(\d*)(?:\|(\d*))?(?:\|(\d*))?\|?\.\]/g, '');
+
+        preview.innerHTML = content;
+        app.syncEditorScroll();
+    },
+
+    setEditorTab: (tab) => {
+        const tabs = ['lyrics', 'tabs', 'strumming'];
+        tabs.forEach(t => {
+            const area = document.getElementById(`editor-${t}-area`);
+            const btn = document.getElementById(`tab-${t}`);
+            if (area) area.classList.toggle('hidden', t !== tab);
+            if (btn) {
+                btn.classList.toggle('border-primary', t === tab);
+                btn.classList.toggle('text-primary', t === tab);
+                btn.classList.toggle('border-transparent', t !== tab);
+                btn.classList.toggle('text-slate-400', t !== tab);
+            }
+        });
+    },
+
+    autoIdentifyChords: () => {
+        const textarea = document.getElementById('edit-content');
+        if (!textarea) return;
+
+        let content = textarea.value;
+        content = app.autoWrapChords(content);
+        textarea.value = content;
+        app.updateEditorPreview();
+    },
+
+    autoWrapChords: (text) => {
+        const lines = text.split('\n');
+        const newLines = lines.map(line => {
+            if (line.includes('[') && line.includes(']')) return line;
+
+            return line.replace(/\b([A-G][b#]?(?:m|maj|min|dim|aug|sus|add|M|D|M7|m7|7)?\d?(?:\/[A-G][b#]?)?)\b/g, (match) => {
+                if (app.isActualChord(match)) {
+                    return `[${match}]`;
+                }
+                return match;
+            });
+        });
+        return newLines.join('\n');
+    },
+
+    deleteCifraFromEditor: () => {
+        const id = document.getElementById('edit-id').value;
+        if (!id) return app.navigate('home');
+        app.deleteCifra(id);
     },
 
     syncEditorScroll: () => {
@@ -2359,39 +2492,63 @@ const app = {
         '|': 'divider', ' ': 'space'
     },
 
-    addStrum: (icon, char) => {
+    addStrum: (type) => {
         const input = document.getElementById('edit-strumming');
-        input.value += char;
-        app.updateStrumPreview(input.value);
+        let val = input.value;
+
+        const map = {
+            'down': 'D',
+            'up': 'U',
+            'muted': 'X',
+            'muted-down': 'd',
+            'muted-up': 'u',
+            'divider': '|',
+            'space': ' '
+        };
+        val += map[type] || '';
+
+        input.value = val;
+        app.updateStrumPreview(val);
     },
 
     clearStrum: () => {
-        const input = document.getElementById('edit-strumming');
-        input.value = '';
+        document.getElementById('edit-strumming').value = '';
         app.updateStrumPreview('');
     },
 
     updateStrumPreview: (strumString) => {
-        const preview = document.getElementById('edit-strumming-preview');
+        const area = document.getElementById('edit-strumming-preview');
+        if (!area) return;
         if (!strumString) {
-            preview.innerHTML = '<span style="color: var(--text-muted); font-size: 0.9rem;">Toque nos botões acima para criar a batida...</span>';
+            area.innerHTML = '<span class="text-slate-400 text-[10px] font-bold uppercase tracking-wider italic">Aguardando ritmo...</span>';
             return;
         }
-        preview.innerHTML = app.renderStrumming(strumString);
+        area.innerHTML = app.renderStrumming(strumString);
     },
 
     renderStrumming: (strumString) => {
         if (!strumString) return '';
-        const chars = strumString.split('');
-        return chars.map((c, index) => {
-            const file = app.strumMapping[c];
-            let content = '';
-            if (file === 'divider') content = '<span class="strum-divider">|</span>';
-            else if (file === 'space') content = '<span class="strum-space"></span>';
-            else if (file) content = `<img src="icons/${file}" class="strum-icon">`;
 
-            if (!content) return '';
-            return `<span class="strum-item" onclick="app.removeStrum(${index})" title="Toque para apagar" style="cursor:pointer; display:flex; align-items:center;">${content}</span>`;
+        // Split by divider to create rows
+        const rows = strumString.split('|').filter(row => row.length > 0);
+
+        return rows.map((row, rowIndex) => {
+            const chars = row.split('');
+            const icons = chars.map((c) => {
+                const file = app.strumMapping[c];
+                if (!file) return '';
+
+                if (file === 'space') {
+                    return '<span class="inline-block w-4"></span>';
+                }
+
+                return `<img src="icons/${file}" class="inline-block h-10 w-auto" alt="${c}">`;
+            }).join('');
+
+            // Add row number indicator
+            const rowNumber = `<span class="text-sm font-bold text-slate-500 dark:text-slate-400 mr-3 min-w-[24px]">${rowIndex + 1}.</span>`;
+
+            return `<div class="flex items-center gap-1 mb-3">${rowNumber}${icons}</div>`;
         }).join('');
     },
 
@@ -3033,7 +3190,7 @@ const app = {
 
         let remaining = seconds;
         div.style.display = 'block';
-        div.innerHTML = `${label} < span id = "loop-seconds" > ${remaining}</span > s...`;
+        div.innerHTML = `${label} <span id="loop-seconds">${remaining}</span>s...`;
 
         const interval = setInterval(() => {
             remaining--;
@@ -3088,33 +3245,32 @@ const app = {
             const sGap = 14 * scale;
             const fGap = 18 * scale;
 
-            // Iniciar SVG
-            let svgStr = `< svg width = "${w}" height = "${h}" viewBox = "0 0 ${w} ${h}" xmlns = "http://www.w3.org/2000/svg" > `;
+            let svgStr = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">`;
 
             // Nut
             const barVal = parseInt(document.getElementById('chord-bar')?.value || chordData.bar);
             const nutWidth = barVal > 0 ? 1 : 4;
-            svgStr += `< line x1 = "${m}" y1 = "${m}" x2 = "${w - m}" y2 = "${m}" stroke = "#4b5563" stroke - width="${nutWidth}" /> `;
+            svgStr += `<line x1="${m}" y1="${m}" x2="${w - m}" y2="${m}" stroke="#4b5563" stroke-width="${nutWidth}" />`;
 
             // Strings
             for (let i = 0; i < 6; i++) {
                 const x = m + i * sGap;
-                svgStr += `< line x1 = "${x}" y1 = "${m}" x2 = "${x}" y2 = "${h - m}" stroke = "#9ca3af" stroke - width="1" /> `;
+                svgStr += `<line x1="${x}" y1="${m}" x2="${x}" y2="${h - m}" stroke="#9ca3af" stroke-width="1" />`;
             }
 
-            // Frets
+            // Freets
             for (let i = 1; i <= 5; i++) {
                 const y = m + i * fGap;
-                svgStr += `< line x1 = "${m}" y1 = "${y}" x2 = "${w - m}" y2 = "${y}" stroke = "#9ca3af" stroke - width="1" /> `;
+                svgStr += `<line x1="${m}" y1="${y}" x2="${w - m}" y2="${y}" stroke="#9ca3af" stroke-width="1" />`;
             }
 
             // Status Row (O/X)
             chordData.p.forEach((fret, sIndex) => {
                 const x = m + sIndex * sGap;
                 if (fret === -1) {
-                    svgStr += `< text x = "${x}" y = "${m - 7}" text - anchor="middle" fill = "#ef4444" font - size="16" font - family="sans-serif" >×</text > `;
+                    svgStr += `<text x="${x}" y="${m - 7}" text-anchor="middle" fill="#ef4444" font-size="16" font-family="sans-serif">×</text>`;
                 } else if (fret === 0) {
-                    svgStr += `< circle cx = "${x}" cy = "${m - 10}" r = "4.5" stroke = "#059669" stroke - width="2" fill = "none" /> `;
+                    svgStr += `<circle cx="${x}" cy="${m - 10}" r="4.5" stroke="#059669" stroke-width="2" fill="none" />`;
                 }
             });
 
@@ -3123,9 +3279,9 @@ const app = {
             if (barVal > 0) {
                 const y = m + (1 * fGap) - (fGap / 2);
                 if (!noBarLine) {
-                    svgStr += `< rect x = "${m - 3}" y = "${y - 6}" width = "${w - 2 * m + 6}" height = "12" rx = "3" fill = "#059669" /> `;
+                    svgStr += `<rect x="${m - 3}" y="${y - 6}" width="${w - 2 * m + 6}" height="12" rx="3" fill="#059669" />`;
                 }
-                svgStr += `< text x = "0" y = "${y + 6}" fill = "#4b5563" font - size="14" font - family="sans-serif" font - weight="bold" > ${barVal}ª</text > `;
+                svgStr += `<text x="0" y="${y + 6}" fill="#4b5563" font-size="14" font-family="sans-serif" font-weight="bold">${barVal}ª</text>`;
             }
 
             // Fingers
@@ -3135,11 +3291,11 @@ const app = {
                     const y = m + (fret * fGap) - (fGap / 2);
                     // Não desenha se houver pestana na casa 1 (simplificação visual do card), A MENOS que noBarLine esteja marcado
                     if (barVal > 0 && fret === 1 && !noBarLine) return;
-                    svgStr += `< circle cx = "${x}" cy = "${y}" r = "7.5" fill = "#059669" /> `;
+                    svgStr += `<circle cx="${x}" cy="${y}" r="7.5" fill="#059669" />`;
                 }
             });
 
-            svgStr += `</svg > `;
+            svgStr += `</svg>`;
 
             const interactiveWrap = document.createElement('div');
             interactiveWrap.className = 'fretboard-interactive';
@@ -3176,7 +3332,7 @@ const app = {
         };
 
         const contentHtml = `
-        < div class= "chord-editor-container" >
+        <div class="chord-editor-container">
         <input type="text" id="new-chord-name" class="modal-input" placeholder="Nome do Acorde (ex: G7M)" style="margin-bottom:0" value="${chordData.name}">
             <div id="chord-creator-fretboard"></div>
             <div class="editor-controls">
@@ -3263,11 +3419,23 @@ const app = {
                     variations.push(newVariation);
                 }
 
-                await app.db.ref('custom_chords/' + app.getChordId(name)).set({
+                // HYBRID Firestore Save
+                const chordPayload = {
                     name: name,
                     variations: variations,
-                    updatedAt: firebase.database.ServerValue.TIMESTAMP
-                });
+                    updatedAt: new Date().toISOString()
+                };
+
+                if (app.namedDb && window.firestoreUtils) {
+                    const { doc, setDoc } = window.firestoreUtils;
+                    const docRef = doc(app.namedDb, 'custom_chords', app.getChordId(name));
+                    await setDoc(docRef, chordPayload);
+                } else {
+                    await app.db.collection('custom_chords').doc(app.getChordId(name)).set(chordPayload);
+                }
+
+                Chords.dict[name] = variations; // Update local dict
+                app.showToast('Acorde salvo!');
 
                 Chords.dict[name] = variations;
                 app.showToast('Acorde gravado com sucesso!');

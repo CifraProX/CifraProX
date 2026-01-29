@@ -100,6 +100,24 @@
             pointer-events: none;
         }
 
+        /* Editor Pro Styles */
+        #edit-preview {
+            line-height: 1.8;
+        }
+
+        .interactive-chord {
+            display: inline-block;
+            background: rgba(16, 185, 129, 0.05);
+            padding: 0 4px;
+            border-radius: 4px;
+            margin: 0 1px;
+            font-weight: 700;
+        }
+
+        .dark .interactive-chord {
+            background: rgba(16, 185, 129, 0.1);
+        }
+
         .modal-active .modal-overlay {
             opacity: 1;
             pointer-events: auto;
@@ -690,11 +708,18 @@
                                 <h2 class="font-display text-3xl font-bold dark:text-white">Meu Repertório</h2>
                                 <p class="text-slate-500 dark:text-slate-400 mt-1">Gerencie suas cifras.</p>
                             </div>
-                            <button onclick="app.navigate('editor')"
-                                class="bg-primary hover:bg-primary-dark text-white px-6 py-3 rounded-full font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5 active:translate-y-0">
-                                <span class="material-icons-round">add</span>
-                                Nova Cifra
-                            </button>
+                            <div class="flex items-center gap-3">
+                                <button onclick="app.navigate('library')"
+                                    class="bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-6 py-3 rounded-full font-bold flex items-center justify-center gap-2 shadow-sm border border-slate-200 dark:border-slate-700 transition-all hover:-translate-y-0.5">
+                                    <span class="material-icons-round">library_music</span>
+                                    Biblioteca
+                                </button>
+                                <button onclick="app.navigate('editor')"
+                                    class="bg-primary hover:bg-primary-dark text-white px-6 py-3 rounded-full font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5 active:translate-y-0">
+                                    <span class="material-icons-round">add</span>
+                                    Nova Cifra
+                                </button>
+                            </div>
                         </div>
 
                         <!-- Filtros (Visual apenas por enquanto) -->
@@ -856,67 +881,421 @@
         </div>
     </template>
 
+    <!-- TEMPLATE: LIBRARY (Acordes) -->
+    <template id="view-library">
+        <div class="max-w-[1600px] mx-auto px-6 py-8">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
+                <div>
+                    <h1 class="font-display text-4xl font-bold dark:text-white leading-tight">Biblioteca de Acordes</h1>
+                    <p class="text-slate-500 dark:text-slate-400 mt-2 text-lg">Consulte e gerencie o dicionário de
+                        diagramas do sistema.</p>
+                </div>
+                <button onclick="app.openChordCreator()"
+                    class="bg-primary hover:bg-emerald-600 text-white px-8 py-4 rounded-2xl font-bold shadow-xl shadow-emerald-500/20 transition-all hover:-translate-y-1 flex items-center justify-center gap-3">
+                    <span class="material-symbols-rounded">add_circle</span>
+                    Novo Acorde
+                </button>
+            </div>
+
+            <div id="library-list"
+                class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-6">
+                <!-- Renderizado via JS: app.loadLibrary -->
+            </div>
+        </div>
+    </template>
+
+    <!-- TEMPLATE: CIFRA (Visualização) -->
+    <template id="view-cifra">
+        <div class="flex-1 flex flex-col bg-white dark:bg-slate-900 transition-colors duration-300">
+            <!-- Header da Visualização -->
+            <div
+                class="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 px-6 py-4 no-print">
+                <div class="max-w-[1200px] mx-auto flex items-center justify-between gap-4">
+                    <div class="flex-1 min-w-0">
+                        <h1 id="view-title"
+                            class="font-display text-2xl font-bold text-slate-900 dark:text-white truncate">Título</h1>
+                        <p id="view-artist" class="text-primary font-bold text-sm tracking-wide uppercase">Artista</p>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <!-- Mode Toggle (Letra/Tabs) -->
+                        <div id="cifra-mode-toggle" class="hidden bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                            <button id="btn-mode-lyrics" onclick="app.setContentView('lyrics')"
+                                class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all">LETRA</button>
+                            <button id="btn-mode-tabs" onclick="app.setContentView('tabs')"
+                                class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all">TAB</button>
+                        </div>
+
+                        <!-- Metronome -->
+                        <button id="metronome-display" onclick="app.toggleMetronome()"
+                            class="hidden bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 px-4 py-2 rounded-xl items-center gap-3 transition-all border border-transparent">
+                            <div id="metronome-dot" class="w-2.5 h-2.5 rounded-full bg-slate-400"></div>
+                            <span id="metronome-bpm-label" class="text-xs font-mono font-bold dark:text-white">BPM:
+                                --</span>
+                        </button>
+
+                        <div id="view-actions" class="hidden flex items-center gap-2">
+                            <button onclick="app.navigate('editor', app.state.currentCifra.id)"
+                                class="p-2.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+                                title="Editar Cifra">
+                                <span class="material-symbols-rounded">edit</span>
+                            </button>
+                            <button onclick="app.deleteCifra(app.state.currentCifra.id)"
+                                class="p-2.5 bg-rose-50 dark:bg-rose-500/10 text-rose-500 rounded-xl hover:bg-rose-100 transition-all"
+                                title="Excluir Cifra">
+                                <span class="material-symbols-rounded">delete</span>
+                            </button>
+                        </div>
+
+                        <button onclick="window.print()"
+                            class="p-2.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">
+                            <span class="material-symbols-rounded">print</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex-1 max-w-[1200px] mx-auto w-full p-6 md:p-10">
+                <!-- Meta Info Tags -->
+                <div id="view-meta" class="flex flex-wrap gap-3 mb-10">
+                    <span id="view-genre"
+                        class="hidden px-4 py-1.5 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-full text-xs font-bold border border-emerald-100 dark:border-emerald-500/20"></span>
+                    <span id="view-tom"
+                        class="hidden px-4 py-1.5 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-full text-xs font-bold border border-blue-100 dark:border-blue-500/20"></span>
+                    <span id="view-capo"
+                        class="hidden px-4 py-1.5 bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-full text-xs font-bold border border-amber-100 dark:border-amber-500/20"></span>
+
+                    <button id="btn-youtube-view" onclick="app.toggleMusicPlayer()"
+                        class="hidden items-center gap-2 px-4 py-1.5 bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded-full text-xs font-bold border border-rose-100 dark:border-rose-500/20 hover:bg-rose-100 transition-all">
+                        <span class="material-symbols-rounded text-sm">play_circle</span> Ouvir Música
+                    </button>
+                    <button id="btn-youtube-training" onclick="app.toggleMusicPlayer(null, 'training')"
+                        class="hidden items-center gap-2 px-4 py-1.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-full text-xs font-bold border border-indigo-100 dark:border-indigo-500/20 hover:bg-indigo-100 transition-all">
+                        <span class="material-symbols-rounded text-sm">school</span> Vídeo de Treino
+                    </button>
+                </div>
+
+                <!-- Chords Gallery -->
+                <div id="view-chords-container" class="hidden mb-12">
+                    <div id="view-chords-list" class="flex flex-wrap gap-4"></div>
+                </div>
+
+                <!-- Suggested Strumming -->
+                <div id="view-strumming-container"
+                    class="hidden mb-12 bg-slate-50 dark:bg-slate-800/40 p-6 rounded-3xl border border-dashed border-slate-200 dark:border-slate-700/50">
+                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Batida Sugerida</p>
+                    <div id="view-strumming" class="flex gap-1 items-end min-h-[40px]"></div>
+                </div>
+
+                <!-- Content Area -->
+                <div id="view-content"
+                    class="cifra-content text-lg md:text-xl font-mono leading-relaxed whitespace-pre text-slate-800 dark:text-slate-200">
+                </div>
+                <div id="view-tabs"
+                    class="hidden cifra-content text-base md:text-lg font-mono leading-tight whitespace-pre text-slate-700 dark:text-slate-300 overflow-x-auto bg-slate-50 dark:bg-slate-800/30 p-6 rounded-2xl border border-slate-100 dark:border-slate-800">
+                </div>
+            </div>
+
+            <!-- Floating Controls Area (Scroll) -->
+            <div class="fixed bottom-8 right-8 flex flex-col gap-4 z-50 no-print">
+                <div id="loop-countdown"
+                    class="hidden bg-slate-900/90 text-white px-6 py-3 rounded-full text-sm font-bold backdrop-blur-md shadow-2xl animate-bounce border border-white/10">
+                    Voltando em <span id="loop-seconds">0</span>s...
+                </div>
+
+                <button id="btn-scroll-toggle" onclick="app.toggleScroll()"
+                    class="w-16 h-16 bg-primary hover:bg-emerald-600 text-white rounded-full flex items-center justify-center shadow-2xl shadow-emerald-500/40 transition-all active:scale-90 overflow-hidden">
+                    <span id="icon-play" class="material-symbols-rounded text-3xl">play_arrow</span>
+                    <span id="icon-pause" class="hidden material-symbols-rounded text-3xl">pause</span>
+                </button>
+            </div>
+
+            <!-- Audio/Video Player Overlay (Compact) -->
+            <div id="music-player-modal" class="hidden fixed bottom-6 left-6 z-50 no-print">
+                <div
+                    class="bg-white dark:bg-slate-800 p-4 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700 flex flex-col gap-4 max-w-[320px]">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="h-10 w-10 bg-primary/10 rounded-full flex items-center justify-center">
+                                <span
+                                    class="material-symbols-rounded text-primary text-xl animate-pulse">music_note</span>
+                            </div>
+                            <div class="min-w-0">
+                                <p id="player-song-title" class="text-xs font-bold dark:text-white truncate">Ouvindo...
+                                </p>
+                                <p id="player-status" class="text-[10px] text-slate-400 uppercase tracking-widest">
+                                    Tocando Agora</p>
+                            </div>
+                        </div>
+                        <button onclick="app.toggleMusicPlayer(false)"
+                            class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-colors">
+                            <span class="material-symbols-rounded text-slate-400">close</span>
+                        </button>
+                    </div>
+                    <div id="player-iframe-wrapper"
+                        class="aspect-video rounded-2xl overflow-hidden bg-black shadow-inner">
+                        <div id="music-player-container"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+
     <template id="view-editor">
-        <div class="min-h-screen flex flex-col w-full bg-background-light dark:bg-background-dark">
-            <!-- Navbar Simplificada -->
-            <nav class="bg-nav-dark text-white px-6 py-3 flex justify-between items-center">
-                <div class="flex items-center gap-4">
-                    <button onclick="app.navigate('home')" class="hover:text-primary"><span
-                            class="material-icons-round">arrow_back</span></button>
-                    <h1 class="font-bold text-lg">Editor de Cifra</h1>
+        <div class="h-screen flex flex-col w-full bg-slate-50 dark:bg-slate-900 overflow-hidden">
+            <!-- Navbar de Ações -->
+            <nav
+                class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 py-3 sticky top-0 z-30 flex justify-between items-center shadow-sm">
+                <div class="flex items-center gap-3">
+                    <button onclick="app.navigate('home')"
+                        class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-colors">
+                        <span class="material-icons-round text-slate-600 dark:text-slate-300">arrow_back</span>
+                    </button>
+                    <div>
+                        <h1 class="font-display font-bold text-slate-800 dark:text-white leading-tight">Editor Pro</h1>
+                        <p class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">CifraProX • v2.0</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="app.importFromCifraClub()"
+                        class="hidden md:flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 rounded-xl font-bold text-sm transition-all border border-emerald-100 dark:border-emerald-500/20">
+                        <span class="material-icons-round text-lg">cloud_download</span>
+                        Importar Cifra Club
+                    </button>
+                    <button type="submit" form="editor-form"
+                        class="flex items-center gap-2 px-6 py-2 bg-primary hover:bg-emerald-600 text-white rounded-xl font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95">
+                        <span class="material-icons-round text-lg">save</span>
+                        Salvar
+                    </button>
                 </div>
             </nav>
 
-            <main class="flex-1 max-w-5xl mx-auto w-full p-6">
-                <form onsubmit="app.saveCifra(event)" class="space-y-6">
-                    <input type="hidden" name="id">
+            <main class="flex-1 flex flex-col overflow-hidden">
+                <form id="editor-form" onsubmit="app.saveCifra(event)" class="h-full flex flex-col md:flex-row">
+                    <input type="hidden" name="id" id="edit-id">
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="space-y-2">
-                            <label class="text-sm font-bold text-slate-500">Título</label>
-                            <input name="title" required
-                                class="w-full rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800"
-                                placeholder="Nome da música">
+                    <!-- LADO ESQUERDO: CONTROLES E TEXTO -->
+                    <div
+                        class="w-full md:w-1/2 flex flex-col border-r border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden">
+
+                        <!-- Cabeçalho de Metadados -->
+                        <div class="p-4 space-y-4 border-b border-slate-100 dark:border-slate-700/50">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="space-y-1">
+                                    <label class="text-[10px] uppercase font-bold text-slate-400 ml-1">Título da
+                                        Música</label>
+                                    <input name="title" id="edit-title" required
+                                        class="w-full bg-slate-50 dark:bg-slate-900 border-transparent focus:border-primary focus:ring-0 rounded-xl px-4 py-2.5 font-bold text-slate-700 dark:text-white"
+                                        placeholder="Ex: Tempo Perdido">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="text-[10px] uppercase font-bold text-slate-400 ml-1">Artista /
+                                        Banda</label>
+                                    <input name="artist" id="edit-artist" required
+                                        class="w-full bg-slate-50 dark:bg-slate-900 border-transparent focus:border-primary focus:ring-0 rounded-xl px-4 py-2.5 font-bold text-slate-700 dark:text-white"
+                                        placeholder="Ex: Legião Urbana">
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                <div class="space-y-1">
+                                    <label class="text-[10px] uppercase font-bold text-slate-400 ml-1">Tom</label>
+                                    <input name="tom" id="edit-tom" placeholder="G" required
+                                        class="w-full bg-slate-50 dark:bg-slate-900 border-transparent focus:border-primary focus:ring-0 rounded-xl px-3 py-2 text-center font-mono">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="text-[10px] uppercase font-bold text-slate-400 ml-1">Capo</label>
+                                    <select name="capo" id="edit-capo" required
+                                        class="w-full bg-slate-50 dark:bg-slate-900 border-transparent focus:border-primary focus:ring-0 rounded-xl px-2 py-2 text-sm">
+                                        <option value="">Sem Capo</option>
+                                        <option value="1ª Casa">1ª Casa</option>
+                                        <option value="2ª Casa">2ª Casa</option>
+                                        <option value="3ª Casa">3ª Casa</option>
+                                        <option value="4ª Casa">4ª Casa</option>
+                                        <option value="5ª Casa">5ª Casa</option>
+                                    </select>
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="text-[10px] uppercase font-bold text-slate-400 ml-1">BPM</label>
+                                    <input name="bpm" id="edit-bpm" type="number" placeholder="120"
+                                        class="w-full bg-slate-50 dark:bg-slate-900 border-transparent focus:border-primary focus:ring-0 rounded-xl px-3 py-2 text-center font-mono">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="text-[10px] uppercase font-bold text-slate-400 ml-1">Gênero</label>
+                                    <input name="genre" id="edit-genre" placeholder="Rock" required
+                                        class="w-full bg-slate-50 dark:bg-slate-900 border-transparent focus:border-primary focus:ring-0 rounded-xl px-3 py-2 text-sm capitalize">
+                                </div>
+                            </div>
                         </div>
-                        <div class="space-y-2">
-                            <label class="text-sm font-bold text-slate-500">Artista</label>
-                            <input name="artist" required
-                                class="w-full rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800"
-                                placeholder="Nome do artista">
+
+                        <!-- Abas do Editor (Letra / Solo / Batida) -->
+                        <div class="flex-1 flex flex-col overflow-hidden">
+                            <div class="flex border-b border-slate-100 dark:border-slate-700">
+                                <button type="button" onclick="app.setEditorTab('lyrics')"
+                                    class="flex-1 py-3 text-xs font-bold uppercase tracking-wider border-b-2 border-primary text-primary transition-all"
+                                    id="tab-lyrics">Letra e Acordes</button>
+                                <button type="button" onclick="app.setEditorTab('tabs')"
+                                    class="flex-1 py-3 text-xs font-bold uppercase tracking-wider border-b-2 border-transparent text-slate-400 transition-all"
+                                    id="tab-tabs">Solos / Riffs</button>
+                                <button type="button" onclick="app.setEditorTab('strumming')"
+                                    class="flex-1 py-3 text-xs font-bold uppercase tracking-wider border-b-2 border-transparent text-slate-400 transition-all"
+                                    id="tab-strumming">Batida</button>
+                            </div>
+
+                            <!-- Área de Texto: Letra -->
+                            <div id="editor-lyrics-area" class="flex-1 flex flex-col p-4 relative overflow-y-auto">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-[10px] font-bold text-slate-400 uppercase">Conteúdo da
+                                        Cifra</span>
+                                    <button type="button" onclick="app.autoIdentifyChords()"
+                                        class="text-[10px] bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 px-2 py-1 rounded-md font-bold hover:bg-blue-100 transition-colors">
+                                        ✨ IDENTIFICAR ACORDES
+                                    </button>
+                                </div>
+                                <textarea name="content" id="edit-content"
+                                    class="flex-1 w-full font-mono text-sm bg-transparent border-none focus:ring-0 p-0 resize-none leading-relaxed"
+                                    placeholder="Cole aqui a letra e os acordes..." oninput="app.updateEditorPreview()"
+                                    onscroll="app.syncEditorScroll()"></textarea>
+                            </div>
+
+                            <!-- Área de Texto: Solos -->
+                            <div id="editor-tabs-area" class="hidden flex-1 flex flex-col p-4 overflow-y-auto">
+                                <span class="text-[10px] font-bold text-slate-400 uppercase mb-2 ml-1">Tablaturas /
+                                    Notas Técnicas</span>
+                                <textarea name="tabs" id="edit-tabs"
+                                    class="flex-1 w-full font-mono text-xs bg-slate-50 dark:bg-slate-900/50 border-none focus:ring-0 rounded-xl p-4 resize-none leading-tight"
+                                    placeholder="e|---0---
+B|---1---..."></textarea>
+                            </div>
+
+                            <!-- Área de Ritmo: Batida -->
+                            <div id="editor-strumming-area" class="hidden flex-1 p-6 space-y-6 overflow-y-auto">
+                                <div
+                                    class="bg-slate-50 dark:bg-slate-900 rounded-2xl p-6 border border-dashed border-slate-200 dark:border-slate-700">
+                                    <p class="text-sm font-bold text-slate-500 mb-4 text-center">Desenhe o ritmo da
+                                        música</p>
+
+                                    <div id="edit-strumming-preview"
+                                        class="flex justify-center gap-1 mb-8 min-h-[60px] items-end">
+                                        <!-- Batidas renderizadas aqui -->
+                                    </div>
+
+                                    <div class="grid grid-cols-3 gap-3">
+                                        <button type="button" onclick="app.addStrum('down')"
+                                            class="flex flex-col items-center gap-1 p-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-primary group transition-all">
+                                            <img src="icons/batida para baixo.svg" alt="Baixo"
+                                                class="w-5 h-5 opacity-70 group-hover:opacity-100">
+                                            <span class="text-[10px] font-bold text-slate-400 uppercase">Baixo</span>
+                                        </button>
+                                        <button type="button" onclick="app.addStrum('up')"
+                                            class="flex flex-col items-center gap-1 p-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-primary group transition-all">
+                                            <img src="icons/batida para cima.svg" alt="Cima"
+                                                class="w-5 h-5 opacity-70 group-hover:opacity-100">
+                                            <span class="text-[10px] font-bold text-slate-400 uppercase">Cima</span>
+                                        </button>
+                                        <button type="button" onclick="app.addStrum('muted')"
+                                            class="flex flex-col items-center gap-1 p-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-primary group transition-all">
+                                            <img src="icons/abafado.svg" alt="Mudo"
+                                                class="w-5 h-5 opacity-70 group-hover:opacity-100">
+                                            <span class="text-[10px] font-bold text-slate-400 uppercase">Mudo</span>
+                                        </button>
+                                        <button type="button" onclick="app.addStrum('muted-down')"
+                                            class="flex flex-col items-center gap-1 p-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-primary group transition-all">
+                                            <img src="icons/abafado para baixo.svg" alt="Abafado Baixo"
+                                                class="w-5 h-5 opacity-70 group-hover:opacity-100">
+                                            <span class="text-[10px] font-bold text-slate-400 uppercase">Abaf. ↓</span>
+                                        </button>
+                                        <button type="button" onclick="app.addStrum('muted-up')"
+                                            class="flex flex-col items-center gap-1 p-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-primary group transition-all">
+                                            <img src="icons/abafado para cima.svg" alt="Abafado Cima"
+                                                class="w-5 h-5 opacity-70 group-hover:opacity-100">
+                                            <span class="text-[10px] font-bold text-slate-400 uppercase">Abaf. ↑</span>
+                                        </button>
+                                        <button type="button" onclick="app.addStrum('divider')"
+                                            class="flex flex-col items-center gap-1 p-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-slate-300 group transition-all">
+                                            <span
+                                                class="text-2xl font-bold text-slate-400 group-hover:text-slate-600">|</span>
+                                            <span class="text-[10px] font-bold text-slate-400 uppercase">Divisor</span>
+                                        </button>
+                                        <button type="button" onclick="app.addStrum('space')"
+                                            class="flex flex-col items-center gap-1 p-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-slate-300 group transition-all">
+                                            <span
+                                                class="material-icons-round text-2xl text-slate-400 group-hover:text-slate-600">space_bar</span>
+                                            <span class="text-[10px] font-bold text-slate-400 uppercase">Espaço</span>
+                                        </button>
+                                        <button type="button" onclick="app.clearStrum()"
+                                            class="flex flex-col items-center gap-1 p-2 bg-red-50 dark:bg-red-500/10 rounded-xl border border-red-100 dark:border-red-900/30 hover:bg-red-100 group transition-all">
+                                            <span class="material-icons-round text-2xl text-red-500">delete_sweep</span>
+                                            <span class="text-[10px] font-bold text-red-400 uppercase">Limpar</span>
+                                        </button>
+                                    </div>
+                                    <input type="hidden" name="strumming" id="edit-strumming">
+                                </div>
+
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div class="space-y-1">
+                                        <label class="text-[10px] uppercase font-bold text-slate-400 ml-1">Link Vídeo
+                                            Aula (YouTube)</label>
+                                        <input name="youtubeTraining" id="edit-youtube-training"
+                                            class="w-full bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-sm"
+                                            placeholder="https://youtube.com/watch?v=...">
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="text-[10px] uppercase font-bold text-slate-400 ml-1">Link
+                                            Performance (YouTube)</label>
+                                        <input name="youtube" id="edit-youtube"
+                                            class="w-full bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-sm"
+                                            placeholder="https://youtube.com/watch?v=...">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Footer Extras -->
+                        <div
+                            class="p-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" name="ready" id="edit-ready" class="sr-only peer" checked>
+                                    <div
+                                        class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-emerald-500">
+                                    </div>
+                                    <span class="ml-3 text-xs font-bold text-slate-500 uppercase">Cifra Pronta</span>
+                                </label>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button type="button" onclick="app.deleteCifraFromEditor()" id="btn-delete-editor"
+                                    class="text-xs font-bold text-red-400 hover:text-red-500 px-3 py-2">EXCLUIR</button>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <input name="tom" placeholder="Tom (Ex: G)"
-                            class="rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800">
-                        <input name="capo" placeholder="Capo"
-                            class="rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800">
-                        <input name="bpm" type="number" placeholder="BPM"
-                            class="rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800">
-                        <input name="genre" placeholder="Gênero"
-                            class="rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800">
-                    </div>
+                    <!-- LADO DIREITO: PREVIEW (Desktop Only) -->
+                    <div
+                        class="hidden md:flex md:w-1/2 flex-col bg-slate-50 dark:bg-slate-900 overflow-hidden relative">
+                        <div
+                            class="absolute top-4 left-4 z-10 px-3 py-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur shadow-sm rounded-full border border-slate-200 dark:border-slate-700">
+                            <span class="text-[10px] font-bold text-primary uppercase flex items-center gap-1">
+                                <span class="w-2 h-2 bg-primary rounded-full animate-pulse"></span> Visualização em
+                                Tempo Real
+                            </span>
+                        </div>
 
-                    <div class="space-y-2">
-                        <label class="text-sm font-bold text-slate-500">Cifra (Cole aqui)</label>
-                        <textarea name="content" rows="15"
-                            class="w-full font-mono text-sm rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 p-4"
-                            placeholder="Cole a cifra com a letra..."></textarea>
-                    </div>
+                        <div id="edit-preview"
+                            class="flex-1 overflow-y-auto p-12 font-mono text-sm leading-relaxed whitespace-pre select-none text-slate-800 dark:text-slate-200">
+                            <!-- Preview renderizado via JS -->
+                        </div>
 
-                    <div class="flex justify-end gap-3">
-                        <button type="button" onclick="app.navigate('home')"
-                            class="px-6 py-2 rounded-full border border-slate-300 dark:border-slate-600 text-slate-500">Cancelar</button>
-                        <button type="submit"
-                            class="bg-primary hover:bg-emerald-600 text-white px-8 py-2 rounded-full font-bold shadow-lg">Salvar
-                            Cifra</button>
+                        <!-- Galeria de Acordes Detectados -->
+                        <div id="edit-chords-container"
+                            class="bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 p-4 min-h-[140px]">
+                            <p class="text-[10px] font-bold text-slate-400 uppercase mb-3">Diagramas Detectados</p>
+                            <div id="edit-chords-list" class="flex gap-4 overflow-x-auto pb-2">
+                                <!-- SVGs dos acordes aqui -->
+                            </div>
+                        </div>
                     </div>
-
-                    <!-- Campos hidden para compatibilidade -->
-                    <input type="hidden" name="tabs">
-                    <input type="hidden" name="youtube">
-                    <input type="hidden" name="youtubeTraining">
-                    <input type="checkbox" name="ready" checked class="hidden">
                 </form>
             </main>
         </div>
@@ -1001,13 +1380,25 @@
 <!-- Scripts -->
 <!-- BRIDGE: Modular SDK para Banco Nomeado (Firestore) -->
 <script type="module">
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+    import { initializeApp, getApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
     import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, getDocs, onSnapshot, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
     import { getAuth, createUserWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
     window.connectToNamedDB = (config, dbName) => {
-        console.log(`[BRIDGE] Conectando ao Firestore: ${dbName}`);
-        const app = initializeApp(config, 'named-db-app'); // Second App Instance
+        console.log(`[BRIDGE] Conectando ao Firestore (Database: ${dbName})`);
+        let app;
+        if (getApps().length > 0) {
+            app = getApp();
+            console.log("[BRIDGE] Reutilizando App Default");
+        } else {
+            app = initializeApp(config);
+            console.log("[BRIDGE] Inicializando Novo App Default");
+        }
+
+        // Inicializa o Auth Modular no mesmo App para compartilhar o contexto de login
+        const auth = getAuth(app);
+        console.log("[BRIDGE] Auth Modular inicializado");
+
         const db = getFirestore(app, dbName);
         return db;
     };
