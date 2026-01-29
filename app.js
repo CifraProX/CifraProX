@@ -2079,7 +2079,86 @@ const app = {
         } catch (error) {
             console.error('Registro falhou:', error);
             let msg = error.message;
-            if (error.code === 'auth/email-already-in-use') msg = 'Este email já está cadastrado.';
+            if (error.code === 'auth/email-already-in-use') {
+                // Tenta recuperar 'usuário órfão' (tem Auth mas não tem Banco)
+                try {
+                    // Tenta logar para obter o UID
+                    const userCredential = await app.auth.signInWithEmailAndPassword(email, password);
+                    const uid = userCredential.user.uid;
+
+                    // Verifica se já existe no banco (Named DB)
+                    let exists = false;
+                    if (app.namedDb && window.firestoreUtils) {
+                        const snap = await window.firestoreUtils.getDoc(window.firestoreUtils.doc(app.namedDb, 'users', uid));
+                        exists = snap.exists();
+                    } else {
+                        const docComp = await app.db.collection('users').doc(uid).get();
+                        exists = docComp.exists;
+                    }
+
+                    if (!exists) {
+                        // RECOVERY FLOW: Cria o perfil que faltava
+                        console.log('[REGISTER] Recuperando usuário órfão:', uid);
+
+                        // Executa lógica de criação de perfil (Refatorar para função seria melhor, mas repetindo para segurança imediata)
+                        // ... Repetindo Passo 2 e 3 ...
+                        let role = 'student';
+                        let plan_id = 1;
+                        if (type.includes('professor')) {
+                            role = 'school';
+                            if (type === 'professor_start') plan_id = 2;
+                            if (type === 'professor_pro') plan_id = 3;
+                            if (type === 'professor_elite') plan_id = 4;
+                        } else if (type.includes('school')) {
+                            role = 'school';
+                            plan_id = 5;
+                        }
+
+                        const userData = {
+                            email: email,
+                            name: name,
+                            role: role,
+                            plan_id: plan_id,
+                            cpf: cpf,
+                            phone: phone,
+                            instrument: instrument,
+                            status: 'active',
+                            section: role === 'admin' ? 'admin' : 'student',
+                            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                        };
+
+                        if (app.namedDb && window.firestoreUtils) {
+                            await window.firestoreUtils.setDoc(window.firestoreUtils.doc(app.namedDb, 'users', uid), userData);
+                        } else {
+                            await app.db.collection('users').doc(uid).set(userData);
+                        }
+
+                        // Update State & Notify
+                        const user = { id: uid, ...userData };
+                        app.state.user = user;
+                        localStorage.setItem('token', 'firebase-session');
+                        localStorage.setItem('user', JSON.stringify(user));
+                        app.showToast('Conta recuperada e ativada! 🚀');
+
+                        // Payment Logic (Repetida)
+                        const paymentLink = 'https://invoice.infinitepay.io/plans/saulo-diogo/1nBPlUHLod';
+                        app.modal({
+                            title: 'Finalizar Assinatura 💳',
+                            content: `Sua conta foi criada! Para ativar o plano <b>${type.toUpperCase().replace('_', ' ')}</b>, finalize o pagamento de teste (R$ 5,00).`,
+                            confirmText: 'Pagar Agora',
+                            cancelText: 'Pagar depois',
+                            onConfirm: () => { window.location.href = paymentLink; }
+                        });
+                        return; // Sair do catch e do register
+                    } else {
+                        msg = 'Este email já possui cadastro completo. Faça Login.';
+                    }
+                } catch (loginErr) {
+                    console.error('Erro ao recuperar orfão:', loginErr);
+                    // Se a senha estiver errada, vai cair aqui
+                    msg = 'Email já cadastrado. Se for você, faça login.';
+                }
+            }
             else if (error.code === 'auth/weak-password') msg = 'A senha deve ter pelo menos 6 caracteres.';
 
             app.showToast('Erro: ' + msg);
