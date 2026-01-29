@@ -2038,7 +2038,8 @@ const app = {
             if (app.namedDb && window.firestoreUtils) {
                 await window.firestoreUtils.setDoc(window.firestoreUtils.doc(app.namedDb, 'users', uid), userData);
             } else {
-                await app.db.collection('users').doc(uid).set(userData);
+                // STRICT CHECK: Se não tiver Named DB, NÃO SALVA.
+                throw new Error("ERRO CRÍTICO: Conexão com banco 'cifraprox' perdida. Não é seguro salvar.");
             }
 
             // 4. Update Function State
