@@ -111,41 +111,19 @@ window.app = {
             }
 
             // Check User Session
-            // LAZY PROFILE CREATION LISTENER (Fix for Race Condition)
-            app.auth.onAuthStateChanged(async (user) => {
-                const pendingData = localStorage.getItem('pending_registration_data');
-                if (user && pendingData && app.namedDb) {
-                    console.log('[AUTH STATE] Usuário detectado e dados pendentes encontrados. Criando perfil tardio no Firestore...');
-                    try {
-                        const userData = JSON.parse(pendingData);
-                        const { doc, setDoc, serverTimestamp } = window.firestoreBridge.utils;
-
-                        // Ensure timestamp is recreated (since JSON lost it)
-                        userData.createdAt = serverTimestamp();
-
-                        // Write to Named DB (Merge to avoid overwriting Cloud Function data)
-                        const userRef = doc(app.namedDb, 'users', user.uid);
-                        await setDoc(userRef, userData, { merge: true });
-
-                        console.log('[AUTH STATE] Perfil sincronizado com sucesso via Lazy Creation!');
-                        localStorage.removeItem('pending_registration_data');
-
-                        // Update local state and UI
-                        app.state.user = { id: user.uid, ...userData };
-                        localStorage.setItem('user', JSON.stringify(app.state.user));
-
-                        app.showToast('Perfil configurado com sucesso! 🚀');
-
-                        // Force header update if needed
-                        if (app.updateHeader) app.updateHeader();
-                    } catch (e) {
-                        console.error('[AUTH STATE] Erro na criação tardia do perfil:', e);
-                        if (e.code === 'permission-denied') {
-                            console.warn('[AUTH STATE] Permissão negada. Verifique se as Regras de Segurança estão implantadas no banco "cifraprox".');
-                        }
-                        // Don't toast error to avoid scaring user if it's just a duplicate
-                    }
+            // Auth State Listener - UI Sync Only
+            app.auth.onAuthStateChanged((user) => {
+                if (user) {
+                    console.log('[AUTH STATE] Usuário logado:', user.uid);
+                    // Sync State from LocalStorage if available (Optimistic)
+                    // Note: Real user data loading should happen via loadHeader or separate listener
+                } else {
+                    console.log('[AUTH STATE] Usuário desconectado');
+                    app.state.user = null;
                 }
+
+                // Force header update
+                if (app.updateHeader) app.updateHeader();
             });
             console.log('[INIT] Verificando sessão local...');
             const token = localStorage.getItem('token');
@@ -2073,14 +2051,32 @@ window.app = {
                 createdAt: dbUtils.serverTimestamp() // Use modular API
             };
 
-            // 3. DEFERRED FIRESTORE PROFILE CREATION (LAZY CREATION)
-            // INSTEAD of writing now (which fails due to Auth race condition),
-            // we save locally and let app.init handle it on the next load/auth-change.
+            // 3. DIRECT FIRESTORE PROFILE CREATION (Legacy/Robust Flow)
+            // Writing immediately to ensure consistency and avoid auth-state race conditions
+            console.log('[REGISTER] Criando perfil no Firestore...');
 
-            console.log('[REGISTER] Salvando dados para criação tardia (Lazy Creation)...');
-            localStorage.setItem('pending_registration_data', JSON.stringify(userData));
+            try {
+                // Determine DB Utils (Bridge)
+                const { doc, setDoc, serverTimestamp } = window.firestoreBridge.utils;
+                const userRef = doc(app.namedDb, 'users', uid);
 
-            console.log('[REGISTER] Auth OK. Perfil será criado automaticamente pelo app.init.');
+                // Add Timestamp
+                userData.createdAt = serverTimestamp();
+
+                // Write with MERGE to play nice with Cloud Functions
+                await setDoc(userRef, userData, { merge: true });
+                console.log('[REGISTER] Perfil criado com sucesso (Direct Write)');
+
+            } catch (dbError) {
+                console.error('[REGISTER] Falha na criação primária do perfil:', dbError);
+                // Fallback: Cloud Function will likely handle it via onCreate trigger
+                console.warn('[REGISTER] Confiando na Cloud Function como fallback.');
+            }
+
+            console.log('[REGISTER] Auth e Perfil processados.');
+
+            // Clear legacy pending data if it exists
+            localStorage.removeItem('pending_registration_data');
 
             // Simulate success delay for UX
             await new Promise(resolve => setTimeout(resolve, 500));
