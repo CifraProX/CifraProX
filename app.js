@@ -2056,7 +2056,7 @@ const app = {
             // 5. Payment Redirect (User Request for Test Link)
             // Triggering for ALL registrations.
 
-            const paymentLink = 'https://link.infinitepay.io/saulo-diogo/VC01-TfsnAer-5,00';
+            const paymentLink = 'https://invoice.infinitepay.io/plans/saulo-diogo/1nBPlUHLod';
 
             // Allow all plans to see the link for testing
             if (true) {
