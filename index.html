@@ -973,6 +973,28 @@
                         class="hidden items-center gap-2 px-4 py-1.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-full text-xs font-bold border border-indigo-100 dark:border-indigo-500/20 hover:bg-indigo-100 transition-all">
                         <span class="material-symbols-rounded text-sm">school</span> Vídeo de Treino
                     </button>
+
+                    <!-- Tone Transposer -->
+                    <div id="transposer-controls"
+                        class="hidden flex items-center bg-slate-100 dark:bg-slate-800 rounded-full p-0.5 border border-slate-200 dark:border-slate-700/50">
+                        <button onclick="app.transpose(-1)"
+                            class="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white dark:hover:bg-slate-700 shadow-sm transition-all"
+                            title="Diminuir Tom">
+                            <span class="material-symbols-rounded text-sm">remove</span>
+                        </button>
+                        <span id="transposer-display"
+                            class="px-2 text-xs font-bold font-mono min-w-[30px] text-center dark:text-white">--</span>
+                        <button onclick="app.transpose(1)"
+                            class="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white dark:hover:bg-slate-700 shadow-sm transition-all"
+                            title="Aumentar Tom">
+                            <span class="material-symbols-rounded text-sm">add</span>
+                        </button>
+                    </div>
+
+                    <button id="btn-save-tone" onclick="app.saveTransposition()"
+                        class="hidden items-center gap-1 px-3 py-1.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 rounded-full text-xs font-bold hover:bg-emerald-200 dark:hover:bg-emerald-500/30 transition-all animate-pulse">
+                        <span class="material-symbols-rounded text-sm">save</span> Salvar Tom
+                    </button>
                 </div>
 
                 <!-- Chords Gallery -->
@@ -1101,11 +1123,21 @@
                                 <div class="space-y-1">
                                     <div class="flex justify-between items-center px-1">
                                         <label class="text-[10px] uppercase font-bold text-slate-400">Tom</label>
-                                        <button type="button" onclick="app.showToneSelector()" id="btn-change-tone"
-                                            class="hidden text-[9px] font-bold text-primary hover:underline uppercase">Alterar</button>
                                     </div>
-                                    <input name="tom" id="edit-tom" placeholder="G" required
-                                        class="w-full bg-slate-50 dark:bg-slate-900 border-transparent focus:border-primary focus:ring-0 rounded-xl px-3 py-2 text-center font-mono">
+                                    <div class="flex items-center gap-1">
+                                        <button type="button" onclick="app.editorTranspose(-1)"
+                                            class="p-2 bg-slate-100 dark:bg-slate-700/50 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors"
+                                            title="Diminuir Semitom">
+                                            <span class="material-icons-round text-sm">remove</span>
+                                        </button>
+                                        <input name="tom" id="edit-tom" placeholder="G" required
+                                            class="flex-1 w-full bg-slate-50 dark:bg-slate-900 border-transparent focus:border-primary focus:ring-0 rounded-xl px-2 py-2 text-center font-mono font-bold uppercase">
+                                        <button type="button" onclick="app.editorTranspose(1)"
+                                            class="p-2 bg-slate-100 dark:bg-slate-700/50 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors"
+                                            title="Aumentar Semitom">
+                                            <span class="material-icons-round text-sm">add</span>
+                                        </button>
+                                    </div>
                                 </div>
                                 <div class="space-y-1">
                                     <label class="text-[10px] uppercase font-bold text-slate-400 ml-1">Capo</label>
@@ -1443,6 +1475,7 @@ B|---1---..." oninput="app.updateTabsPreview()"></textarea>
         };
     </script>
 
+    <script src="transposition.js?v=1" defer></script>
     <script src="chords.js?v=4" defer></script>
     <script src="app.js?v=11" defer></script>
 

@@ -7,7 +7,8 @@ const app = {
         currentSetlist: null,
         currentSetlistIndex: -1,
         unsubs: { cifras: null, setlists: null }, // Control for listeners
-        metronome: { interval: null, bpm: 0, active: false }
+        metronome: { interval: null, bpm: 0, active: false },
+        currentTranspose: 0, // State for transposition
     },
 
     // --- CONFIGURAÇÃO LOCAL ---
@@ -641,38 +642,48 @@ const app = {
 
             // --- Tentar capturar Tom e Capo do Cifra Club ---
             const tomEl = doc.getElementById('cifra_tom');
-            if (tomEl && document.getElementById('edit-tom')) {
+
+            // --- CAPTURAR LISTA DE TONS DO CIFRA CLUB (Side Tom) ---
+            const sideTom = doc.querySelector('#side-tom ul') || doc.querySelector('.list-tones');
+            let availableTones = [];
+            if (sideTom) {
+                availableTones = Array.from(sideTom.querySelectorAll('li, a')).map(li => li.innerText.trim()).filter(t => t.length > 0 && !t.includes(' ½ Tom') && app.isActualChord(t));
+                console.log("[IMPORT] Tons disponíveis detectados:", availableTones);
+            }
+
+            let finalTom = "";
+            let originalTom = "";
+
+            if (tomEl) {
+                // Pega apenas o que está em destaque (b ou a), ignorando o resto
                 const specificTom = tomEl.querySelector('b') || tomEl.querySelector('a') || tomEl;
-                let tomVal = specificTom.innerText.trim();
-                document.getElementById('edit-tom').value = tomVal;
+                originalTom = specificTom.innerText.trim();
+                finalTom = originalTom;
             }
 
-            let capoVal = null;
-            const capoMatch = data.contents.match(/capo:\s*(\d+)/i);
-            if (capoMatch) capoVal = capoMatch[1];
+            // AUTO-TRANSPOSE Logic
+            const currentTomInput = document.getElementById('edit-tom');
+            const requestedTom = currentTomInput && currentTomInput.value.trim() !== "" ? currentTomInput.value.trim() : null;
 
-            if (!capoVal) {
-                const capoEl = doc.getElementById('cifra_capo') || doc.querySelector('.js-capo-value');
-                if (capoEl) {
-                    const match = capoEl.innerText.match(/(\d+)/);
-                    if (match) capoVal = match[1];
-                }
-            }
-
-            const capoSelect = document.getElementById('edit-capo');
-            if (capoSelect) {
-                if (capoVal && capoVal !== "0") {
-                    const targetValue = capoVal + "ª Casa";
-                    capoSelect.value = targetValue;
-
-                    if (capoSelect.selectedIndex === -1) {
-                        const options = Array.from(capoSelect.options);
-                        const matched = options.find(o => o.value.includes(capoVal) || o.text.includes(capoVal));
-                        if (matched) capoSelect.value = matched.value;
+            if (originalTom && requestedTom && app.isActualChord(requestedTom) && app.isActualChord(originalTom)) {
+                if (originalTom !== requestedTom) {
+                    console.log(`[IMPORT] Auto-Transposing: ${originalTom} -> ${requestedTom}`);
+                    const semitones = Transposer.getSemitonesBetween(originalTom, requestedTom);
+                    if (semitones !== 0) {
+                        // Passa availableTones para garantir a preferencia (Bb vs A#)
+                        finalContent = Transposer.transposeSong(finalContent, semitones, availableTones);
+                        finalTom = requestedTom;
+                        app.showToast(`Cifra transposta automaticamente para ${requestedTom}`);
                     }
-                } else {
-                    capoSelect.value = "";
                 }
+            } else if (!originalTom && requestedTom && app.isActualChord(requestedTom)) {
+                // Se não detectou tom original, assume o solicitado mas não transpõe
+                finalTom = requestedTom;
+            }
+
+            if (document.getElementById('edit-tom')) {
+                document.getElementById('edit-tom').value = finalTom;
+                document.getElementById('edit-tom').dataset.availableTones = JSON.stringify(availableTones);
             }
 
             // Separar Tablaturas (Solo/Riff) da Letra
@@ -863,6 +874,8 @@ const app = {
             youtubeTraining: form.youtubeTraining.value || '',
             strumming: form.strumming.value || '',
             ready: form.ready.checked,
+            // Recupera availableTones do dataset do input tom, se existir
+            availableTones: form.tom.dataset.availableTones ? JSON.parse(form.tom.dataset.availableTones) : (app.state.currentCifra?.availableTones || []),
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
 
@@ -1596,6 +1609,190 @@ const app = {
         }
     },
 
+    // --- TRANSPOSITION SYSTEM ---
+
+    editorTranspose: (step) => {
+        const textarea = document.getElementById('edit-content');
+        const tomInput = document.getElementById('edit-tom');
+
+        if (!textarea || !textarea.value) return;
+
+        const currentContent = textarea.value;
+        const currentTom = tomInput.value.trim();
+
+        if (typeof Transposer !== 'undefined') {
+            // Tenta obter tons disponíveis do dataset ou do estado atual se estiver editando
+            let availableTones = [];
+            if (tomInput.dataset.availableTones) {
+                try {
+                    availableTones = JSON.parse(tomInput.dataset.availableTones);
+                } catch (e) { console.warn('Erro ao parsear availableTones', e); }
+            } else if (app.state.currentCifra && app.state.currentCifra.availableTones) {
+                availableTones = app.state.currentCifra.availableTones;
+            }
+
+            const newContent = Transposer.transposeSong(currentContent, step, availableTones);
+            textarea.value = newContent;
+
+            if (currentTom && app.isActualChord(currentTom)) {
+                // Passa availableTones para o chord transpose também
+                const newTom = Transposer.transposeChord(currentTom, step, availableTones);
+                tomInput.value = newTom;
+            }
+            app.updateEditorPreview();
+            app.showToast(step > 0 ? 'Tom aumentado (+1 semitom)' : 'Tom diminuído (-1 semitom)');
+        } else {
+            console.error("Transposer module not found");
+        }
+    },
+
+    transpose: (step) => {
+        if (!app.state.currentCifra) return;
+
+        const contentDiv = document.getElementById('view-content');
+        if (!contentDiv) return;
+
+        app.state.currentTranspose += step;
+        const total = app.state.currentTranspose;
+
+        const originalContent = app.state.currentCifra.content;
+        const availableTones = app.state.currentCifra.availableTones || [];
+
+        const newContent = Transposer.transposeSong(originalContent, total, availableTones);
+
+        document.getElementById('transposer-display').innerText =
+            (total > 0 ? '+' : '') + total + (total === 0 ? ' (Original)' : '');
+
+        const btnSave = document.getElementById('btn-save-tone');
+        if (btnSave) {
+            if (total !== 0) {
+                btnSave.classList.remove('hidden');
+                btnSave.style.display = 'flex';
+                document.getElementById('transposer-display').style.color = 'var(--color-primary)';
+            } else {
+                btnSave.classList.add('hidden');
+                btnSave.style.display = 'none';
+                document.getElementById('transposer-display').style.color = '';
+            }
+        }
+
+        let contentHtml = newContent.replace(/\r\n/g, '\n');
+
+        // Re-apply rendering logic (simple version)
+        contentHtml = contentHtml.replace(/\[([^\]]+)\]/g, (match, chordName) => {
+            if (chordName.startsWith('|') || chordName.startsWith('.')) return match;
+            const openB = '<span class="chord-bracket">[</span>';
+            const closeB = '<span class="chord-bracket">]</span>';
+            const fullChordName = chordName;
+            if (app.isActualChord(chordName)) {
+                return `${openB}<b class="interactive-chord" onclick="app.showChordPopover(event, '${fullChordName}')">${fullChordName}</b>${closeB}`;
+            } else {
+                return `${openB}<b class="section-marker">${fullChordName}</b>${closeB}`;
+            }
+        });
+
+        contentDiv.innerHTML = contentHtml;
+        app.updateChordGallery(newContent);
+    },
+
+    updateChordGallery: (content) => {
+        const chordsContainer = document.getElementById('view-chords-container');
+        const chordsList = document.getElementById('view-chords-list');
+
+        const chordRegex = /\[(.*?)\]/g;
+        const foundChords = new Set();
+        let match;
+        while ((match = chordRegex.exec(content)) !== null) {
+            const name = match[1];
+            if (app.isActualChord(name)) {
+                foundChords.add(name);
+            }
+        }
+
+        if (foundChords.size > 0) {
+            chordsContainer.style.display = 'block';
+            chordsList.innerHTML = '';
+            foundChords.forEach(chordName => {
+                const card = app.createChordCard(chordName, false);
+                if (card) chordsList.appendChild(card);
+            });
+        } else {
+            chordsContainer.style.display = 'none';
+        }
+    },
+
+    saveTransposition: async () => {
+        if (!app.state.currentCifra || app.state.currentTranspose === 0) return;
+
+        const btn = document.getElementById('btn-save-tone');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = 'Salvando...';
+        btn.disabled = true;
+
+        try {
+            const total = app.state.currentTranspose;
+            const originalContent = app.state.currentCifra.content;
+            const availableTones = app.state.currentCifra.availableTones || [];
+
+            const newContent = Transposer.transposeSong(originalContent, total, availableTones);
+
+            let newTom = app.state.currentCifra.tom;
+            if (newTom) {
+                const cleanTom = newTom.trim();
+                if (/^[A-Ga-g]/.test(cleanTom)) {
+                    newTom = Transposer.transposeChord(cleanTom, total, availableTones);
+                }
+            }
+
+            const id = app.state.currentCifra.id;
+
+            // Simple update using app.db (Compat) or namedDb if available
+            if (app.namedDb && window.firestoreUtils) {
+                const { doc, updateDoc } = window.firestoreUtils;
+                const docRef = doc(app.namedDb, 'cifras', id);
+                await updateDoc(docRef, {
+                    content: newContent,
+                    tom: newTom || app.state.currentCifra.tom,
+                    availableTones: availableTones,
+                    updatedAt: new Date().toISOString()
+                });
+            } else {
+                await app.db.collection('cifras').doc(id).update({
+                    content: newContent,
+                    tom: newTom || app.state.currentCifra.tom,
+                    availableTones: availableTones,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            }
+
+            // Reset State
+            app.state.currentCifra.content = newContent;
+            app.state.currentCifra.tom = newTom;
+            app.state.currentTranspose = 0;
+
+            document.getElementById('transposer-display').innerText = "Original";
+            document.getElementById('transposer-display').style.color = '';
+
+            const tomEl = document.getElementById('view-tom');
+            if (newTom) {
+                tomEl.innerText = `🎼 Tom: ${newTom}`;
+                tomEl.style.display = 'inline-block';
+            }
+
+            btn.classList.add('hidden');
+            btn.classList.remove('flex');
+
+            app.showToast('Novo tom salvo!');
+
+        } catch (e) {
+            console.error(e);
+            alert('Erro ao salvar tom: ' + e.message);
+        } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    },
+
     loadCifra: async (id) => {
         try {
             const doc = await app.db.collection('cifras').doc(id).get();
@@ -1607,6 +1804,23 @@ const app = {
             }
 
             const data = { id: doc.id, ...doc.data() };
+
+            // --- Reset Transposition State ---
+            app.state.currentTranspose = 0;
+            const transposerUI = document.getElementById('transposer-controls');
+            const transposerDisplay = document.getElementById('transposer-display');
+            const btnSaveTone = document.getElementById('btn-save-tone');
+
+            if (transposerUI) {
+                transposerUI.style.display = 'flex';
+                transposerUI.classList.remove('hidden');
+                transposerDisplay.innerText = "Original";
+                transposerDisplay.style.color = '';
+            }
+            if (btnSaveTone) {
+                btnSaveTone.classList.add('hidden');
+                btnSaveTone.classList.remove('flex');
+            }
 
             // --- Metronome Setup ---
             app.stopMetronome();
