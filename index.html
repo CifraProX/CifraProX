@@ -1378,7 +1378,7 @@ B|---1---..."></textarea>
     <script type="module">
         import { initializeApp, getApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
         import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, getDocs, onSnapshot, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
-        import { getAuth, createUserWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
         window.connectToNamedDB = (config, dbName) => {
             console.log(`[BRIDGE] Conectando ao Firestore (Database: ${dbName})`);
@@ -1402,7 +1402,7 @@ B|---1---..."></textarea>
         // Expose Utils for app.js
         window.firestoreUtils = {
             doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, getDocs, onSnapshot, query, orderBy, getFirestore,
-            getAuth, createUserWithEmailAndPassword, initializeApp
+            getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, initializeApp
         };
     </script>
 

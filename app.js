@@ -433,8 +433,14 @@ const app = {
         }
 
         try {
-            // 1. Firebase Auth
-            const userCredential = await app.auth.signInWithEmailAndPassword(email, password);
+            // 1. Modular Auth (Standardized)
+            let userCredential;
+            if (app.namedDb && window.firestoreUtils) {
+                const modularAuth = window.firestoreUtils.getAuth();
+                userCredential = await window.firestoreUtils.signInWithEmailAndPassword(modularAuth, email, password);
+            } else {
+                userCredential = await app.auth.signInWithEmailAndPassword(email, password);
+            }
             const uid = userCredential.user.uid;
 
             // 2. Fetch User Profile from Firestore
@@ -1480,7 +1486,7 @@ const app = {
             }
             console.log("[CHORDS] Acordes carregados:", Object.keys(Chords.dict).length);
         } catch (e) {
-            console.error("Erro ao carregar acordes customizados:", e);
+            console.warn("[CHORDS] Notas customizadas não carregadas (pode ser falta de permissão ou coleção vazia):", e.message);
         }
     },
 
@@ -1897,7 +1903,7 @@ const app = {
             await app.db.collection('setlists').add({
                 name: name,
                 songs: [],
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                updatedAt: new Date().toISOString()
             });
             // Listener should update UI
         } catch (e) {
@@ -1965,7 +1971,7 @@ const app = {
                 songs.push(songId);
                 await ref.update({
                     songs: songs,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    updatedAt: new Date().toISOString()
                 });
                 app.showToast('Música adicionada ao repertório!');
             } else {
@@ -2033,8 +2039,14 @@ const app = {
         }
 
         try {
-            // 1. Create Auth User
-            const userCredential = await app.auth.createUserWithEmailAndPassword(email, password);
+            // 1. Create Auth User (Standardized Modular)
+            let userCredential;
+            if (app.namedDb && window.firestoreUtils) {
+                const modularAuth = window.firestoreUtils.getAuth();
+                userCredential = await window.firestoreUtils.createUserWithEmailAndPassword(modularAuth, email, password);
+            } else {
+                userCredential = await app.auth.createUserWithEmailAndPassword(email, password);
+            }
             const uid = userCredential.user.uid;
 
             // 2. Determine Role & Plan ID
@@ -2069,7 +2081,7 @@ const app = {
                 instrument: instrument,
                 status: 'active', // Active default for now, or 'pending_payment'
                 section: role === 'admin' ? 'admin' : 'student',
-                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                createdAt: new Date().toISOString()
             };
 
             if (app.namedDb && window.firestoreUtils) {
@@ -2116,8 +2128,14 @@ const app = {
             if (error.code === 'auth/email-already-in-use') {
                 // Tenta recuperar 'usuário órfão' (tem Auth mas não tem Banco)
                 try {
-                    // Tenta logar para obter o UID
-                    const userCredential = await app.auth.signInWithEmailAndPassword(email, password);
+                    // Tenta logar para obter o UID (Modular)
+                    let userCredential;
+                    if (app.namedDb && window.firestoreUtils) {
+                        const modularAuth = window.firestoreUtils.getAuth();
+                        userCredential = await window.firestoreUtils.signInWithEmailAndPassword(modularAuth, email, password);
+                    } else {
+                        userCredential = await app.auth.signInWithEmailAndPassword(email, password);
+                    }
                     const uid = userCredential.user.uid;
 
                     // Verifica se já existe no banco (Named DB)
@@ -2158,7 +2176,7 @@ const app = {
                             instrument: instrument,
                             status: 'active',
                             section: role === 'admin' ? 'admin' : 'student',
-                            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                            createdAt: new Date().toISOString()
                         };
 
                         if (app.namedDb && window.firestoreUtils) {
@@ -2282,7 +2300,7 @@ const app = {
         try {
             await app.db.collection('setlists').doc(setlist.id).update({
                 songs: songs,
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                updatedAt: new Date().toISOString()
             });
             // Update local state and refresh
             setlist.songs = songs;
@@ -2309,7 +2327,7 @@ const app = {
         try {
             await app.db.collection('setlists').doc(setlist.id).update({
                 songs: songs,
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                updatedAt: new Date().toISOString()
             });
             setlist.songs = songs;
             app.openSetlist(setlist.id);
