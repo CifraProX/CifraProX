@@ -496,7 +496,7 @@ const app = {
         } catch (error) {
             console.error(error);
             let msg = 'Erro ao fazer login.';
-            if (error.code === 'auth/wrong-password') msg = 'Senha incorreta.';
+            if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') msg = 'Email ou senha incorretos.';
             else if (error.code === 'auth/user-not-found') msg = 'Usuário não encontrado.';
             else if (error.code === 'auth/invalid-email') msg = 'Email inválido.';
             app.showToast(msg);
@@ -524,7 +524,7 @@ const app = {
             .replace(/^-+|-+$/g, ''); // Limpa bordas
     },
 
-    importFromCifraClub: async () => {
+    importFromCifraClub: async (forcedUrl = null) => {
         const titleInput = document.getElementById('edit-title');
         const artistInput = document.getElementById('edit-artist');
         const title = titleInput.value.trim();
@@ -536,35 +536,36 @@ const app = {
         }
 
         const btn = document.querySelector('button[onclick="app.importFromCifraClub()"]');
-        const originalText = btn.innerText;
-        btn.innerText = '⌛ Buscando...';
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<span class="material-icons-round text-lg animate-spin">refresh</span> Buscando...';
         btn.disabled = true;
 
         try {
-            // --- 0. Verificar se a música já existe na biblioteca ---
-            const snapDup = await app.db.collection('cifras').where('title', '==', title).get();
+            // --- 0. Verificar se a música já existe na biblioteca (apenas na busca inicial) ---
+            if (!forcedUrl) {
+                const snapDup = await app.db.collection('cifras').where('title', '==', title).get();
 
-            let isDuplicate = false;
-            if (!snapDup.empty) {
-                // Check artist manually (Firestore where is exact, but let's be safe)
-                snapDup.forEach(doc => {
-                    const cifra = doc.data();
-                    if (cifra.artist === artist) isDuplicate = true;
-                });
-            }
+                let isDuplicate = false;
+                if (!snapDup.empty) {
+                    snapDup.forEach(doc => {
+                        const cifra = doc.data();
+                        if (cifra.artist === artist) isDuplicate = true;
+                    });
+                }
 
-            if (isDuplicate && !document.getElementById('edit-id').value) {
-                const proceed = confirm(`A música "${title}" de "${artist}" já existe na sua biblioteca. Deseja importar e sobrescrever o conteúdo atual do editor?`);
-                if (!proceed) {
-                    btn.innerText = originalText;
-                    btn.disabled = false;
-                    return;
+                if (isDuplicate && !document.getElementById('edit-id').value) {
+                    const proceed = confirm(`A música "${title}" de "${artist}" já existe na sua biblioteca. Deseja importar e sobrescrever o conteúdo atual do editor?`);
+                    if (!proceed) {
+                        btn.innerHTML = originalHTML;
+                        btn.disabled = false;
+                        return;
+                    }
                 }
             }
 
             const artSlug = app.slugify(artist);
             const musSlug = app.slugify(title);
-            const url = `https://www.cifraclub.com.br/${artSlug}/${musSlug}/`;
+            const url = forcedUrl || `https://www.cifraclub.com.br/${artSlug}/${musSlug}/`;
 
             console.log(`[IMPORT] Iniciando busca para: ${url}`);
 
@@ -582,11 +583,10 @@ const app = {
                     textResponse = await response.text();
                     data = JSON.parse(textResponse);
                 } else {
-                    throw new Error(`Proxy 1 falhou com status ${response.status}`);
+                    throw new Error(`Proxy 1 falhou`);
                 }
             } catch (err1) {
-                console.warn(`[IMPORT] Proxy 1 falhou: ${err1.message}. Tentando Proxy 2...`);
-
+                console.warn(`[IMPORT] Proxy 1 falhou. Tentando Proxy 2...`);
                 try {
                     // Tenta Proxy 2: corsproxy.io
                     const proxyUrl2 = `https://corsproxy.io/?${encodeURIComponent(url)}`;
@@ -594,18 +594,30 @@ const app = {
 
                     if (response.ok) {
                         const rawHtml = await response.text();
-                        data = { contents: rawHtml }; // Formato diferente do allorigins
+                        data = { contents: rawHtml };
                     } else {
-                        throw new Error(`Proxy 2 falhou com status ${response.status}`);
+                        throw new Error(`Proxy 2 falhou`);
                     }
                 } catch (err2) {
-                    console.error(`[IMPORT] Ambos os proxies falharam.`);
-                    throw new Error('Não foi possível conectar aos servidores de busca. Verifique sua conexão ou tente mais tarde.');
+                    throw new Error('Não foi possível conectar aos servidores de busca.');
                 }
             }
 
             if (!data || !data.contents) {
                 throw new Error('Conteúdo não encontrado na resposta do servidor.');
+            }
+
+            // --- 1. Detecção de Versões (Se for a busca inicial) ---
+            if (!forcedUrl) {
+                const versions = app.parseCifraClubVersions(data.contents, url);
+                if (versions.length > 1) {
+                    app.showImportSelector(versions, (selectedUrl) => {
+                        app.importFromCifraClub(selectedUrl);
+                    });
+                    btn.innerHTML = originalHTML;
+                    btn.disabled = false;
+                    return;
+                }
             }
 
             const parser = new DOMParser();
@@ -615,7 +627,7 @@ const app = {
             let contentEl = doc.querySelector('pre') || doc.querySelector('.cifra_cnt');
 
             if (!contentEl) {
-                throw new Error('Cifra não encontrada. Verifique se o nome está exato.');
+                throw new Error('Cifra não encontrada no conteúdo da página.');
             }
 
             // Converter <b>Acorde</b> para [Acorde]
@@ -630,13 +642,11 @@ const app = {
             // --- Tentar capturar Tom e Capo do Cifra Club ---
             const tomEl = doc.getElementById('cifra_tom');
             if (tomEl && document.getElementById('edit-tom')) {
-                // Pega apenas o que está em destaque (b ou a), ignorando o resto
                 const specificTom = tomEl.querySelector('b') || tomEl.querySelector('a') || tomEl;
                 let tomVal = specificTom.innerText.trim();
                 document.getElementById('edit-tom').value = tomVal;
             }
 
-            // Melhoria na detecção do Capo
             let capoVal = null;
             const capoMatch = data.contents.match(/capo:\s*(\d+)/i);
             if (capoMatch) capoVal = capoMatch[1];
@@ -649,20 +659,23 @@ const app = {
                 }
             }
 
-            if (capoVal && document.getElementById('edit-capo')) {
-                const select = document.getElementById('edit-capo');
-                const targetValue = capoVal + "ª Casa";
-                select.value = targetValue;
+            const capoSelect = document.getElementById('edit-capo');
+            if (capoSelect) {
+                if (capoVal && capoVal !== "0") {
+                    const targetValue = capoVal + "ª Casa";
+                    capoSelect.value = targetValue;
 
-                // Fallback se não bater exatamente com o value
-                if (select.selectedIndex === -1) {
-                    const options = Array.from(select.options);
-                    const matched = options.find(o => o.value.includes(capoVal) || o.text.includes(capoVal));
-                    if (matched) select.value = matched.value;
+                    if (capoSelect.selectedIndex === -1) {
+                        const options = Array.from(capoSelect.options);
+                        const matched = options.find(o => o.value.includes(capoVal) || o.text.includes(capoVal));
+                        if (matched) capoSelect.value = matched.value;
+                    }
+                } else {
+                    capoSelect.value = "";
                 }
             }
 
-            // Separar Tablaturas (Solo/Riff) da Letra (Usando buffer para preservar espaços)
+            // Separar Tablaturas (Solo/Riff) da Letra
             const lines = finalContent.split('\n');
             let mainLines = [];
             let tabLines = [];
@@ -677,33 +690,13 @@ const app = {
                     continue;
                 }
 
-                const nextLine = lines[i + 1] || "";
-                const nextNextLine = lines[i + 2] || "";
-
-                // É uma linha de tabulação real? (ex: |--- ou hífens longos)
                 const isTabLine = /[a-zA-Z]?\|-/.test(line) || /-[-|0-9]{8,}/.test(line);
-
-                // É um cabeçalho informativo de tab? 
                 const tabKeywords = /tab|solo|dedilhado|riff|baixo|intro/i;
                 const isTabHeading = (lineTrim.startsWith('[') && tabKeywords.test(lineTrim)) || (lineTrim.endsWith(':') && tabKeywords.test(lineTrim));
 
-                // Se é um cabeçalho e as próximas linhas são tab
-                const isHeadingForTab = isTabHeading && (
-                    /[a-zA-Z]?\|-/.test(nextLine) || /-[-|0-9]{8,}/.test(nextLine) ||
-                    /[a-zA-Z]?\|-/.test(nextNextLine) || /-[-|0-9]{8,}/.test(nextNextLine)
-                );
-
-                if (isTabLine || isHeadingForTab) {
+                if (isTabLine || isTabHeading) {
                     tabLines.push(...emptyBuffer);
-
-                    // Adicionar a linha
                     tabLines.push(line);
-
-                    // Se for cabeçalho e a próxima linha NÃO for vazia, força um espaço para estética
-                    if (isHeadingForTab && nextLine.trim() !== "") {
-                        tabLines.push("");
-                    }
-
                     emptyBuffer = [];
                 } else {
                     mainLines.push(...emptyBuffer);
@@ -711,30 +704,143 @@ const app = {
                     emptyBuffer = [];
                 }
             }
-            // Limpa buffer restante
             mainLines.push(...emptyBuffer);
 
             const cleanMain = "[p|0|0|]\n\n" + mainLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
             const cleanTabs = tabLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 
-            // Preencher Editor
-            const textarea = document.getElementById('edit-content');
+            document.getElementById('edit-content').value = cleanMain;
             const tabArea = document.getElementById('edit-tabs');
-
-            textarea.value = cleanMain;
             if (tabArea) tabArea.value = cleanTabs;
 
-            // Scroll to top of textarea and trigger preview
-            textarea.scrollTop = 0;
+            document.getElementById('edit-content').scrollTop = 0;
             app.updateEditorPreview();
+            app.setEditorTab('lyrics');
+            app.showToast('Cifra importada com sucesso!');
 
         } catch (e) {
             console.error('Erro na importação:', e);
             alert('Erro ao importar: ' + e.message);
         } finally {
-            btn.innerText = originalText;
+            btn.innerHTML = originalHTML;
             btn.disabled = false;
         }
+    },
+
+    parseCifraClubVersions: (html, baseUrl) => {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const versions = [];
+        const cleanBase = baseUrl.split('?')[0].replace(/\/$/, '');
+        const pathPart = cleanBase.replace('https://www.cifraclub.com.br', '');
+
+        versions.push({ label: 'Principal', url: baseUrl, icon: 'queue_music', desc: 'Versão Completa' });
+
+        // --- Extrair Tons Disponíveis ---
+        const sideTom = doc.querySelector('#side-tom ul');
+        if (sideTom) {
+            const tones = Array.from(sideTom.querySelectorAll('li')).map(li => li.innerText.trim()).filter(t => t.length > 0 && !t.includes(' ½ Tom'));
+            app.state.availableTones = tones;
+            const btn = document.getElementById('btn-change-tone');
+            if (btn) {
+                btn.classList.remove('hidden');
+                app.state.currentImportUrl = cleanBase;
+            }
+        }
+
+        const seenUrls = new Set([cleanBase, baseUrl]);
+        const links = doc.querySelectorAll('a');
+        links.forEach(a => {
+            const href = a.getAttribute('href');
+            if (!href || !href.includes(pathPart)) return;
+
+            let fullUrl = href.startsWith('http') ? href : `https://www.cifraclub.com.br${href.startsWith('/') ? '' : '/'}${href}`;
+            const cleanUrl = fullUrl.split('?')[0].replace(/\/$/, '');
+            if (seenUrls.has(cleanUrl)) return;
+
+            const text = a.innerText.toLowerCase();
+            const labelsMap = {
+                'simplificada': { icon: 'auto_fix_high', label: 'Simplificada' },
+                'guitarra': { icon: 'electric_guitar', label: 'Guitarra' },
+                'violão': { icon: 'music_note', label: 'Violão' },
+                'baixo': { icon: 'speaker', label: 'Baixo' },
+                'teclado': { icon: 'piano', label: 'Teclado' },
+                'ukulele': { icon: 'music_note', label: 'Ukulele' }
+            };
+
+            let match = null;
+            for (const [key, conf] of Object.entries(labelsMap)) {
+                if (text.includes(key)) { match = conf; break; }
+            }
+
+            if (match) {
+                versions.push({ ...match, url: fullUrl, desc: 'Versão Alternativa' });
+                seenUrls.add(cleanUrl);
+            }
+        });
+        return versions;
+    },
+
+    showToneSelector: () => {
+        const tones = app.state.availableTones || [];
+        if (tones.length === 0) return app.showToast('Nenhum tom alternativo encontrado.');
+
+        const template = document.getElementById('view-tone-selector');
+        if (!template) return;
+
+        const clone = template.content.cloneNode(true);
+        const modal = clone.querySelector('div');
+        modal.id = 'tone-selector-modal';
+        const grid = clone.querySelector('#import-tones-list div');
+
+        tones.forEach(tone => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'p-3 bg-white dark:bg-slate-700/50 border border-slate-100 dark:border-slate-600 rounded-xl hover:border-primary hover:bg-primary/5 transition-all text-sm font-bold text-slate-700 dark:text-white';
+            btn.innerText = tone;
+            btn.onclick = () => {
+                modal.remove();
+                const cleanUrl = app.state.currentImportUrl;
+                // Cifra Club usa ?key=X para tons. X é o tom como texto ex: G, Bb...
+                const selectedUrl = `${cleanUrl}/?key=${encodeURIComponent(tone)}`;
+                app.importFromCifraClub(selectedUrl);
+            };
+            grid.appendChild(btn);
+        });
+
+        document.body.appendChild(clone);
+    },
+
+    showImportSelector: (versions, onSelect) => {
+        const template = document.getElementById('view-import-selector');
+        if (!template) return;
+
+        const clone = template.content.cloneNode(true);
+        const modal = clone.querySelector('div');
+        modal.id = 'import-selector-modal';
+        const list = clone.getElementById('import-versions-list');
+
+        versions.forEach(v => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'w-full flex items-center justify-between p-4 bg-white dark:bg-slate-700/50 border border-slate-100 dark:border-slate-600 rounded-2xl hover:border-primary hover:bg-primary/5 transition-all group text-left';
+            btn.innerHTML = `
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-600/50 flex items-center justify-center text-slate-400 group-hover:text-primary group-hover:bg-primary/10 transition-all">
+                        <span class="material-icons-round text-2xl">${v.icon || 'music_note'}</span>
+                    </div>
+                    <div>
+                        <div class="font-bold text-slate-700 dark:text-white group-hover:text-primary transition-colors">${v.label}</div>
+                        <div class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">${v.desc || 'Versão Cifra Club'}</div>
+                    </div>
+                </div>
+                <span class="material-icons-round text-slate-300 group-hover:text-primary group-hover:translate-x-1 transition-all">chevron_right</span>
+            `;
+            btn.onclick = () => { modal.remove(); onSelect(v.url); };
+            list.appendChild(btn);
+        });
+
+        document.body.appendChild(clone);
     },
 
 
@@ -2420,7 +2526,7 @@ const app = {
 
         const strum = cifra.strumming || '';
         document.getElementById('edit-strumming').value = strum;
-        document.getElementById('edit-ready').checked = cifra.ready !== false;
+        document.getElementById('edit-ready').checked = cifra.ready === true;
         document.getElementById('edit-tabs').value = cifra.tabs || '';
 
         app.updateStrumPreview(strum);
@@ -2475,13 +2581,10 @@ const app = {
             const fullChordName = chord;
             const cleanBase = chord.replace(/\*+$/, '');
 
-            const openB = '<span class="text-slate-300 dark:text-slate-600 font-normal">[</span>';
-            const closeB = '<span class="text-slate-300 dark:text-slate-600 font-normal">]</span>';
-
             if (app.isActualChord(cleanBase)) {
-                return `${openB}<b class="interactive-chord text-primary cursor-pointer hover:underline" onclick="app.showChordPopover(event, '${fullChordName}')">${fullChordName}</b>${closeB}`;
+                return `<b class="text-primary cursor-pointer hover:underline" onclick="app.showChordPopover(event, '${fullChordName}')">${fullChordName}</b>`;
             } else {
-                return `${openB}<b class="text-blue-500 font-bold">${fullChordName}</b>${closeB}`;
+                return `<b class="text-blue-500 font-bold">${fullChordName}</b>`;
             }
         });
 
@@ -2499,10 +2602,62 @@ const app = {
 
         // 3. Remove Loop Markers if present
         content = content.replace(/\[\|(\d*)(?:\|(\d*))?(?:\|(\d*))?\|?\]/g, '');
-        content = content.replace(/\[\.\|(\d*)(?:\|(\d*))?(?:\|(\d*))?\|?\.\]/g, '');
+        content = content.replace(/\[\.\|(\d*)(?:\|(\d*))?(?:\|(\d*))?\|\.\]/g, '');
 
         preview.innerHTML = content;
         app.syncEditorScroll();
+
+        // Update tabs preview
+        app.updateTabsPreview();
+    },
+
+    updateTabsPreview: () => {
+        const tabsInput = document.getElementById('edit-tabs');
+        const tabsPreview = document.getElementById('edit-preview-tabs');
+        const toggleContainer = document.getElementById('preview-toggle-container');
+
+        if (!tabsInput || !tabsPreview || !toggleContainer) return;
+
+        const tabsContent = tabsInput.value.trim();
+
+        if (tabsContent) {
+            // Show toggle buttons if there's tabs content
+            toggleContainer.style.display = 'flex';
+
+            // Sanitize and display tabs
+            const sanitized = tabsContent.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            tabsPreview.innerHTML = sanitized;
+        } else {
+            // Hide toggle buttons if no tabs
+            toggleContainer.style.display = 'none';
+            app.setPreviewMode('lyrics'); // Reset to lyrics
+        }
+    },
+
+    setPreviewMode: (mode) => {
+        const lyricsPreview = document.getElementById('edit-preview');
+        const tabsPreview = document.getElementById('edit-preview-tabs');
+        const lyricsBtn = document.getElementById('preview-btn-lyrics');
+        const tabsBtn = document.getElementById('preview-btn-tabs');
+        const chordsContainer = document.getElementById('edit-chords-container');
+
+        if (!lyricsPreview || !tabsPreview || !lyricsBtn || !tabsBtn) return;
+
+        if (mode === 'tabs') {
+            lyricsPreview.classList.add('hidden');
+            tabsPreview.classList.remove('hidden');
+            if (chordsContainer) chordsContainer.style.display = 'none';
+
+            lyricsBtn.className = 'px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 transition-all';
+            tabsBtn.className = 'px-3 py-1.5 text-xs font-bold rounded-lg bg-primary text-white transition-all';
+        } else {
+            lyricsPreview.classList.remove('hidden');
+            tabsPreview.classList.add('hidden');
+            if (chordsContainer) chordsContainer.style.display = 'block';
+
+            lyricsBtn.className = 'px-3 py-1.5 text-xs font-bold rounded-lg bg-primary text-white transition-all';
+            tabsBtn.className = 'px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 transition-all';
+        }
     },
 
     setEditorTab: (tab) => {
@@ -2534,8 +2689,20 @@ const app = {
         const lines = text.split('\n');
         const newLines = lines.map(line => {
             if (line.includes('[') && line.includes(']')) return line;
+            if (line.trim() === "") return line;
+
+            // Heurística: se a linha tem muitas letras minúsculas (mais de 20% das letras), 
+            // provavelmente é uma linha de letra e não uma linha de acordes.
+            const letters = line.match(/[a-zA-Z]/g) || [];
+            const lowercase = line.match(/[a-z]/g) || [];
+            const isLyrics = letters.length > 5 && (lowercase.length / letters.length) > 0.3;
 
             return line.replace(/\b([A-G][b#]?(?:m|maj|min|dim|aug|sus|add|M|D|M7|m7|7)?\d?(?:\/[A-G][b#]?)?)\b/g, (match) => {
+                // Filtro especial para caracteres isolados que são palavras comuns em PT: A, E, D
+                if (isLyrics && ['A', 'E', 'D'].includes(match)) {
+                    return match;
+                }
+
                 if (app.isActualChord(match)) {
                     return `[${match}]`;
                 }
@@ -2569,6 +2736,15 @@ const app = {
         const input = document.getElementById('edit-strumming');
         let val = input.value;
 
+        // Limite de 5 variações (máximo 4 divisores '|')
+        if (type === 'divider') {
+            const currentDividers = (val.match(/\|/g) || []).length;
+            if (currentDividers >= 4) {
+                app.showToast('Limite de 5 variações atingido.');
+                return;
+            }
+        }
+
         const map = {
             'down': 'D',
             'up': 'U',
@@ -2585,25 +2761,27 @@ const app = {
     },
 
     clearStrum: () => {
-        document.getElementById('edit-strumming').value = '';
-        app.updateStrumPreview('');
+        const input = document.getElementById('edit-strumming');
+        let val = input.value;
+        if (val.length > 0) {
+            val = val.slice(0, -1); // Remove um a um (ordem decrescente)
+            input.value = val;
+            app.updateStrumPreview(val);
+        }
     },
 
     updateStrumPreview: (strumString) => {
         const area = document.getElementById('edit-strumming-preview');
         if (!area) return;
-        if (!strumString) {
-            area.innerHTML = '<span class="text-slate-400 text-[10px] font-bold uppercase tracking-wider italic">Aguardando ritmo...</span>';
-            return;
-        }
-        area.innerHTML = app.renderStrumming(strumString);
+
+        // Render actual content or leave empty (container has fixed height)
+        area.innerHTML = app.renderStrumming(strumString || '');
     },
 
     renderStrumming: (strumString) => {
         if (!strumString) return '';
 
-        // Split by divider to create rows
-        const rows = strumString.split('|').filter(row => row.length > 0);
+        const rows = strumString.split('|');
 
         return rows.map((row, rowIndex) => {
             const chars = row.split('');
@@ -2618,10 +2796,10 @@ const app = {
                 return `<img src="icons/${file}" class="inline-block h-10 w-auto" alt="${c}">`;
             }).join('');
 
-            // Add row number indicator
             const rowNumber = `<span class="text-sm font-bold text-slate-500 dark:text-slate-400 mr-3 min-w-[24px]">${rowIndex + 1}.</span>`;
+            const content = icons || '<span class="text-slate-400/30 italic text-[10px]">...</span>';
 
-            return `<div class="flex items-center gap-1 mb-3">${rowNumber}${icons}</div>`;
+            return `<div class="flex items-center gap-1 mb-2">${rowNumber}${content}</div>`;
         }).join('');
     },
 

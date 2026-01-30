@@ -1052,16 +1052,15 @@
                         <span class="material-icons-round text-slate-600 dark:text-slate-300">arrow_back</span>
                     </button>
                     <div>
-                        <h1 class="font-display font-bold text-slate-800 dark:text-white leading-tight">Editor Pro</h1>
-                        <p class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">CifraProX • v2.0</p>
+                        <h1 class="font-display font-bold text-slate-800 dark:text-white leading-tight">Editor de Cifras
+                        </h1>
                     </div>
                 </div>
-
                 <div class="flex items-center gap-2">
                     <button type="button" onclick="app.importFromCifraClub()"
                         class="hidden md:flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 rounded-xl font-bold text-sm transition-all border border-emerald-100 dark:border-emerald-500/20">
                         <span class="material-icons-round text-lg">cloud_download</span>
-                        Importar Cifra Club
+                        Importar Cifras
                     </button>
                     <button type="submit" form="editor-form"
                         class="flex items-center gap-2 px-6 py-2 bg-primary hover:bg-emerald-600 text-white rounded-xl font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95">
@@ -1100,7 +1099,11 @@
 
                             <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
                                 <div class="space-y-1">
-                                    <label class="text-[10px] uppercase font-bold text-slate-400 ml-1">Tom</label>
+                                    <div class="flex justify-between items-center px-1">
+                                        <label class="text-[10px] uppercase font-bold text-slate-400">Tom</label>
+                                        <button type="button" onclick="app.showToneSelector()" id="btn-change-tone"
+                                            class="hidden text-[9px] font-bold text-primary hover:underline uppercase">Alterar</button>
+                                    </div>
                                     <input name="tom" id="edit-tom" placeholder="G" required
                                         class="w-full bg-slate-50 dark:bg-slate-900 border-transparent focus:border-primary focus:ring-0 rounded-xl px-3 py-2 text-center font-mono">
                                 </div>
@@ -1137,7 +1140,7 @@
                                     id="tab-lyrics">Letra e Acordes</button>
                                 <button type="button" onclick="app.setEditorTab('tabs')"
                                     class="flex-1 py-3 text-xs font-bold uppercase tracking-wider border-b-2 border-transparent text-slate-400 transition-all"
-                                    id="tab-tabs">Solos / Riffs</button>
+                                    id="tab-tabs">Tablaturas</button>
                                 <button type="button" onclick="app.setEditorTab('strumming')"
                                     class="flex-1 py-3 text-xs font-bold uppercase tracking-wider border-b-2 border-transparent text-slate-400 transition-all"
                                     id="tab-strumming">Batida</button>
@@ -1166,68 +1169,82 @@
                                 <textarea name="tabs" id="edit-tabs"
                                     class="flex-1 w-full font-mono text-xs bg-slate-50 dark:bg-slate-900/50 border-none focus:ring-0 rounded-xl p-4 resize-none leading-tight"
                                     placeholder="e|---0---
-B|---1---..."></textarea>
+B|---1---..." oninput="app.updateTabsPreview()"></textarea>
                             </div>
 
                             <!-- Área de Ritmo: Batida -->
-                            <div id="editor-strumming-area" class="hidden flex-1 p-6 space-y-6 overflow-y-auto">
+                            <div id="editor-strumming-area" class="hidden flex-1 p-4 space-y-4 overflow-hidden">
                                 <div
-                                    class="bg-slate-50 dark:bg-slate-900 rounded-2xl p-6 border border-dashed border-slate-200 dark:border-slate-700">
-                                    <p class="text-sm font-bold text-slate-500 mb-4 text-center">Desenhe o ritmo da
+                                    class="bg-slate-50 dark:bg-slate-900 rounded-2xl p-4 border border-dashed border-slate-200 dark:border-slate-700">
+                                    <p class="text-sm font-bold text-slate-500 mb-3 text-center">Desenhe o ritmo da
                                         música</p>
 
                                     <div id="edit-strumming-preview"
-                                        class="flex justify-center gap-1 mb-8 min-h-[60px] items-end">
-                                        <!-- Batidas renderizadas aqui -->
+                                        class="flex flex-col items-center gap-1 mb-3 h-[270px]">
+                                        <!-- Batidas renderizadas aqui (Verticalmente agora) -->
                                     </div>
 
-                                    <div class="grid grid-cols-3 gap-3">
+                                    <div class="grid grid-cols-3 gap-2">
                                         <button type="button" onclick="app.addStrum('down')"
-                                            class="flex flex-col items-center gap-1 p-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-primary group transition-all">
+                                            class="flex items-center justify-center p-1.5 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-primary group transition-all"
+                                            title="Baixo">
                                             <img src="icons/batida para baixo.svg" alt="Baixo"
-                                                class="w-5 h-5 opacity-70 group-hover:opacity-100">
-                                            <span class="text-[10px] font-bold text-slate-400 uppercase">Baixo</span>
+                                                class="w-4 h-4 opacity-70 group-hover:opacity-100">
+                                            <span
+                                                class="text-[9px] font-bold text-slate-400 uppercase ml-2">Baixo</span>
                                         </button>
                                         <button type="button" onclick="app.addStrum('up')"
-                                            class="flex flex-col items-center gap-1 p-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-primary group transition-all">
+                                            class="flex items-center justify-center p-1.5 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-primary group transition-all"
+                                            title="Cima">
                                             <img src="icons/batida para cima.svg" alt="Cima"
-                                                class="w-5 h-5 opacity-70 group-hover:opacity-100">
-                                            <span class="text-[10px] font-bold text-slate-400 uppercase">Cima</span>
+                                                class="w-4 h-4 opacity-70 group-hover:opacity-100">
+                                            <span class="text-[9px] font-bold text-slate-400 uppercase ml-2">Cima</span>
                                         </button>
                                         <button type="button" onclick="app.addStrum('muted')"
-                                            class="flex flex-col items-center gap-1 p-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-primary group transition-all">
+                                            class="flex items-center justify-center p-1.5 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-primary group transition-all"
+                                            title="Mudo">
                                             <img src="icons/abafado.svg" alt="Mudo"
-                                                class="w-5 h-5 opacity-70 group-hover:opacity-100">
-                                            <span class="text-[10px] font-bold text-slate-400 uppercase">Mudo</span>
+                                                class="w-4 h-4 opacity-70 group-hover:opacity-100">
+                                            <span class="text-[9px] font-bold text-slate-400 uppercase ml-2">Mudo</span>
                                         </button>
                                         <button type="button" onclick="app.addStrum('muted-down')"
-                                            class="flex flex-col items-center gap-1 p-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-primary group transition-all">
+                                            class="flex items-center justify-center p-1.5 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-primary group transition-all"
+                                            title="Abafado Baixo">
                                             <img src="icons/abafado para baixo.svg" alt="Abafado Baixo"
-                                                class="w-5 h-5 opacity-70 group-hover:opacity-100">
-                                            <span class="text-[10px] font-bold text-slate-400 uppercase">Abaf. ↓</span>
+                                                class="w-4 h-4 opacity-70 group-hover:opacity-100">
+                                            <span class="text-[9px] font-bold text-slate-400 uppercase ml-2">Abaf.
+                                                ↓</span>
                                         </button>
                                         <button type="button" onclick="app.addStrum('muted-up')"
-                                            class="flex flex-col items-center gap-1 p-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-primary group transition-all">
+                                            class="flex items-center justify-center p-1.5 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-primary group transition-all"
+                                            title="Abafado Cima">
                                             <img src="icons/abafado para cima.svg" alt="Abafado Cima"
-                                                class="w-5 h-5 opacity-70 group-hover:opacity-100">
-                                            <span class="text-[10px] font-bold text-slate-400 uppercase">Abaf. ↑</span>
+                                                class="w-4 h-4 opacity-70 group-hover:opacity-100">
+                                            <span class="text-[9px] font-bold text-slate-400 uppercase ml-2">Abaf.
+                                                ↑</span>
                                         </button>
                                         <button type="button" onclick="app.addStrum('divider')"
-                                            class="flex flex-col items-center gap-1 p-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-slate-300 group transition-all">
+                                            class="flex items-center justify-center p-1.5 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg border border-emerald-200 dark:border-emerald-800 hover:border-emerald-500 group transition-all"
+                                            title="Nova Variação">
                                             <span
-                                                class="text-2xl font-bold text-slate-400 group-hover:text-slate-600">|</span>
-                                            <span class="text-[10px] font-bold text-slate-400 uppercase">Divisor</span>
+                                                class="material-icons-round text-base text-emerald-500 group-hover:scale-110 transition-transform">playlist_add</span>
+                                            <span
+                                                class="text-[9px] font-bold text-emerald-500 uppercase ml-2">Variação</span>
                                         </button>
                                         <button type="button" onclick="app.addStrum('space')"
-                                            class="flex flex-col items-center gap-1 p-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-slate-300 group transition-all">
+                                            class="flex items-center justify-center p-1.5 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-slate-300 group transition-all"
+                                            title="Espaço">
                                             <span
-                                                class="material-icons-round text-2xl text-slate-400 group-hover:text-slate-600">space_bar</span>
-                                            <span class="text-[10px] font-bold text-slate-400 uppercase">Espaço</span>
+                                                class="material-icons-round text-base text-slate-400 group-hover:text-slate-600">space_bar</span>
+                                            <span
+                                                class="text-[9px] font-bold text-slate-400 uppercase ml-2">Espaço</span>
                                         </button>
                                         <button type="button" onclick="app.clearStrum()"
-                                            class="flex flex-col items-center gap-1 p-2 bg-red-50 dark:bg-red-500/10 rounded-xl border border-red-100 dark:border-red-900/30 hover:bg-red-100 group transition-all">
-                                            <span class="material-icons-round text-2xl text-red-500">delete_sweep</span>
-                                            <span class="text-[10px] font-bold text-red-400 uppercase">Limpar</span>
+                                            class="flex items-center justify-center p-1.5 bg-red-50 dark:bg-red-500/10 rounded-lg border border-red-100 dark:border-red-900/30 hover:bg-red-100 group transition-all"
+                                            title="Limpar Tudo">
+                                            <span
+                                                class="material-icons-round text-base text-red-500">delete_sweep</span>
+                                            <span class="text-[9px] font-bold text-red-400 uppercase ml-2">Limpar</span>
                                         </button>
                                     </div>
                                     <input type="hidden" name="strumming" id="edit-strumming">
@@ -1257,7 +1274,7 @@ B|---1---..."></textarea>
                             class="p-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
                             <div class="flex items-center gap-3">
                                 <label class="relative inline-flex items-center cursor-pointer">
-                                    <input type="checkbox" name="ready" id="edit-ready" class="sr-only peer" checked>
+                                    <input type="checkbox" name="ready" id="edit-ready" class="sr-only peer">
                                     <div
                                         class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-emerald-500">
                                     </div>
@@ -1275,16 +1292,36 @@ B|---1---..."></textarea>
                     <div
                         class="hidden md:flex md:w-1/2 flex-col bg-slate-50 dark:bg-slate-900 overflow-hidden relative">
                         <div
-                            class="absolute top-4 left-4 z-10 px-3 py-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur shadow-sm rounded-full border border-slate-200 dark:border-slate-700">
-                            <span class="text-[10px] font-bold text-primary uppercase flex items-center gap-1">
-                                <span class="w-2 h-2 bg-primary rounded-full animate-pulse"></span> Visualização em
-                                Tempo Real
-                            </span>
+                            class="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700">
+                            <div
+                                class="px-3 py-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur shadow-sm rounded-full border border-slate-200 dark:border-slate-700">
+                                <span class="text-[10px] font-bold text-primary uppercase flex items-center gap-1">
+                                    <span class="w-2 h-2 bg-primary rounded-full animate-pulse"></span> Visualização em
+                                    Tempo Real
+                                </span>
+                            </div>
+
+                            <!-- Toggle Buttons -->
+                            <div class="flex gap-2" id="preview-toggle-container" style="display: none;">
+                                <button type="button" onclick="app.setPreviewMode('lyrics')" id="preview-btn-lyrics"
+                                    class="px-3 py-1.5 text-xs font-bold rounded-lg bg-primary text-white transition-all">
+                                    Letra
+                                </button>
+                                <button type="button" onclick="app.setPreviewMode('tabs')" id="preview-btn-tabs"
+                                    class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 transition-all">
+                                    Tablaturas
+                                </button>
+                            </div>
                         </div>
 
                         <div id="edit-preview"
                             class="flex-1 overflow-y-auto p-12 font-mono text-sm leading-relaxed whitespace-pre select-none text-slate-800 dark:text-slate-200">
                             <!-- Preview renderizado via JS -->
+                        </div>
+
+                        <div id="edit-preview-tabs"
+                            class="hidden flex-1 overflow-y-auto p-12 font-mono text-xs leading-tight whitespace-pre select-none text-slate-800 dark:text-slate-200">
+                            <!-- Tabs preview -->
                         </div>
 
                         <!-- Galeria de Acordes Detectados -->
@@ -1409,6 +1446,75 @@ B|---1---..."></textarea>
     <script src="chords.js?v=4" defer></script>
     <script src="app.js?v=11" defer></script>
 
+    <!-- Template: Modal Escolha de Versão Importação -->
+    <template id="view-import-selector">
+        <div
+            class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+            <div
+                class="bg-white dark:bg-slate-800 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+                <div
+                    class="p-6 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+                    <div>
+                        <h3 class="text-xl font-display font-bold text-slate-800 dark:text-white">Escolher Versão</h3>
+                        <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Cifra Club • Versões
+                            Disponíveis</p>
+                    </div>
+                    <button onclick="document.getElementById('import-selector-modal').remove()"
+                        class="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-colors">
+                        <span class="material-icons-round text-slate-400">close</span>
+                    </button>
+                </div>
+
+                <div class="p-6 space-y-3" id="import-versions-list">
+                    <!-- Opções de versão serão inseridas aqui -->
+                </div>
+
+                <div
+                    class="p-6 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-700 flex justify-end">
+                    <button onclick="document.getElementById('import-selector-modal').remove()"
+                        class="px-6 py-2 text-sm font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+                        CANCELAR
+                    </button>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- Template: Modal Escolha de Tom Cifra Club -->
+    <template id="view-tone-selector">
+        <div
+            class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+            <div
+                class="bg-white dark:bg-slate-800 rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+                <div
+                    class="p-6 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+                    <div>
+                        <h3 class="text-xl font-display font-bold text-slate-800 dark:text-white">Tonalidade</h3>
+                        <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">Cifra Club • Tons
+                            Disponíveis</p>
+                    </div>
+                    <button onclick="document.getElementById('tone-selector-modal').remove()"
+                        class="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-colors">
+                        <span class="material-icons-round text-slate-400">close</span>
+                    </button>
+                </div>
+
+                <div class="p-4 max-h-[300px] overflow-y-auto" id="import-tones-list">
+                    <div class="grid grid-cols-3 gap-2">
+                        <!-- Botões de tom inseridos aqui -->
+                    </div>
+                </div>
+
+                <div
+                    class="p-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-700 flex justify-end">
+                    <button onclick="document.getElementById('tone-selector-modal').remove()"
+                        class="px-6 py-2 text-sm font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+                        CANCELAR
+                    </button>
+                </div>
+            </div>
+        </div>
+    </template>
 </body>
 
 </html>
