@@ -1,5 +1,14 @@
-# Task: Correção de Erro de Serialização Firestore (Mix de SDKs)
+- [x] Investigate `app_v2.js`
+- [ ] Backend: Install `firebase-admin` and configure SDK.
+- [ ] Backend: Implement `POST /api/create-payment-link` to generate InfinitePay links with `webhook_url`.
+- [ ] Backend: Implement `POST /webhooks/infinitepay` with `metadata` validation.
+- [ ] Frontend: Update `register` to call backend for payment link.
+- [ ] Frontend: Remove client-side payment confirmation.logic
+- [x] Identify the cause of the "Erro ao fazer login"
+- [x] Fix the registration process
+- [x] Fix the login process
+- [x] Fix "Failed to fetch" on Admin Edit
+- [x] Add Classification Labels (Student/School/Prof)
+- [x] Change Registration Flow (Payment First)
+- [x] Verify changes
 
-- [x] Corrigir `createdAt` no fluxo de "Recuperação de Usuário Órfão" em `app_v2.js` <!-- id: 0 -->
-- [x] Adicionar `serverTimestamp` em `index.html` (Causa Raiz do erro silencioso) <!-- id: 1 -->
-- [ ] Criar Release v2.1.3 e Deploy <!-- id: 2 -->

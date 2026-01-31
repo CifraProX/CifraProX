@@ -1,26 +1,55 @@
-# Plano de Implementação: Fallback de Segurança para Timestamps
+# User Profile & Professor Classrooms Plan
 
-## Problema
-Usuários enfrentam erros de "Email já registrado" ao usar emails novos.
-Isso ocorre devido a uma condição de corrida:
-1. A primeira tentativa cria o usuário no Auth, mas falha ao gravar no banco porque `serverTimestamp` não existe (devido ao cache antigo do `index.html`).
-2. O usuário clica novamente (ou o sistema retenta), caindo no erro `auth/email-already-in-use`.
-3. A recuperação (Recovery Flow) também falha pelo mesmo motivo (falta de `serverTimestamp`), exibindo a mensagem genérica de erro.
+## Goal
+Enable users to view their profile/settings and allow Professors (School role) to manage Classrooms.
 
-## Solução Proposta
-Blindar o código `app_v2.js` contra a falta de `serverTimestamp`. Se a função não estiver disponível (cache antigo), usaremos `new Date()` ou `new Date().toISOString()` como fallback. Isso garante que o registro funcione imediatamente sem obrigar o usuário a limpar cache.
+## User Review Required
+> [!IMPORTANT]
+> - "Professor" role currently maps to "School" in the backend logic. The "Classrooms" feature will be added to the School Dashboard (`view-school`).
+> - The Profile view will be a new top-level view accessible from the Header.
 
-## Alterações Planejadas
+## Proposed Changes
 
-### `c:\Users\Saulero\Desktop\Cifraprox\CifraProX\app_v2.js`
+### Frontend (`index.html`)
 
-#### [Fluxo Principal de Registro]
-- Alterar a obtenção do timestamp.
-- **De**: `userData.createdAt = serverTimestamp();`
-- **Para**: Verificação se `serverTimestamp` é função. Se não for, usar `new Date()`.
+#### [NEW] `template#view-profile`
+- A new view displaying:
+  - User Avatar & Name
+  - Email (ReadOnly/Editable)
+  - Plan Details
+  - System Usage Stats (Simulated or Real)
+  - Settings (Theme, etc.)
 
-#### [Fluxo de Recuperação (Recovery)]
-- Aplicar a mesma lógica de fallback no bloco de recuperação de usuário órfão.
+#### [MODIFY] `template#view-school`
+- Add a customized "Salas de Aula" section below the Professors list.
+- Display list of Active Classrooms.
+- Add "Criar Nova Sala" button.
 
-## Verificação
-- **Manual**: Tentar registrar novo usuário. Mesmo se `index.html` for antigo, o código JS terá o fallback e prosseguirá com sucesso.
+#### [MODIFY] `template#view-home` (Header)
+- Add "Meu Perfil" option in the user dropdown/menu or make the Avatar clickable to navigate to `#profile`.
+
+### Backend Logic (`app_v2.js`)
+
+#### [NEW] `app.loadProfile()`
+- Fetch user full data from Firestore.
+- Render data into `view-profile`.
+
+#### [MODIFY] `app.loadSchoolDashboard()`
+- Fetch and render "Classrooms" (Salas) from Firestore (`classrooms` collection).
+- Handle "Create Classroom" action.
+
+#### [NEW] `app.createClassroom()`
+- Prompt for Classroom Name.
+- Save to Firestore `classrooms` collection linked to the Professor/School UID.
+
+## Verification Plan
+### Manual Verification
+1. **Profile**:
+   - Login as any user.
+   - Click "Meu Perfil" in header.
+   - Verify all info is correct.
+2. **Classrooms**:
+   - Login as Professor/School.
+   - Go to Dashboard (School View).
+   - Click "Criar Nova Sala".
+   - Verify it appears in the list.

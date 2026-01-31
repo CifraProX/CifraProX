@@ -206,32 +206,229 @@ app.post('/auth/register', async (req, res) => {
     }
 });
 
+// --- FIREBASE ADMIN SETUP ---
+const admin = require('firebase-admin');
+// NOTE: For production, allow the environment to provide credentials (GOOGLE_APPLICATION_CREDENTIALS)
+// OR require a serviceAccountKey.json file in the backend folder.
+// For now, we try to initialize with default credentials or specific file if exists.
+try {
+    // Tenta carregar serviceAccountKey.json se existir
+    // const serviceAccount = require('./serviceAccountKey.json');
+    // admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+
+    // Fallback: Default Application Credentials (common in Google Cloud / Firebase Hosting)
+    if (!admin.apps.length) {
+        admin.initializeApp();
+        console.log("Firebase Admin Initialized (Default Credentials)");
+    }
+} catch (e) {
+    console.warn("⚠️ Firebase Admin Setup Warning: Could not initialize. Webhook processing might fail if credentials are missing. Error:", e.message);
+}
+
+const firestore = admin.firestore();
+const auth = admin.auth();
+
+// ... existing code ...
+
 // --- ROTA DE WEBHOOK (InfinitePay) ---
-// Note: This is a PLACEHOLDER. We need the real payload structure.
 app.post('/webhooks/infinitepay', async (req, res) => {
+    // 1. Authorization / Signature Validation
+    // Como InfinitePay não usa API Key para este fluxo, a segurança depende de:
+    // A) Segredo no Header (X-Webhook-Token) configurado na criação do link? (Se suportado)
+    // B) Validação estrita do external_reference (Metadata) que DEVE existir no nosso banco.
+    // C) Verificar IPs da InfinitePay (Opcional/Avançado)
+
+    // Vamos confiar na presença e validade do external_reference pre-existente.
+    // Se o ID não existe no nosso banco "pending", ignoramos.
+
     try {
         const payload = req.body;
-        console.log('Webhook received:', payload);
+        console.log('[WEBHOOK] Payload received:', JSON.stringify(payload, null, 2));
 
-        // TODO: Validate signature if available.
-        // TODO: Identify user from payload (metadata, email reference, etc).
-        // Since we don't have metadata in the simple link, we assume for now this is a manual or mocked trigger,
-        // OR user sends us the email in the payload.
+        // 2. Extract Data
+        // Estrutura Típica v2: { event: "transaction.updated", data: { status: "approved", metadata: { external_reference: "..." } } }
+        let status = payload.status || (payload.data && payload.data.status);
+        let externalRef = payload.metadata?.external_reference || payload.data?.metadata?.external_reference;
 
-        // Mock Implementation: Expecting { email: "user@example.com", status: "approved" }
-        if (payload.status === 'approved' && payload.email) {
-            await db.query(
-                "UPDATE users SET status = 'active', payment_status = 'paid' WHERE email = $1",
-                [payload.email]
-            );
-            console.log(`User ${payload.email} activated.`);
-            res.json({ status: 'success', message: 'User activated' });
-        } else {
-            res.json({ status: 'ignored', message: 'Not approved or missing email' });
+        // Robustez: Se o payload vier diferente, tenta achar qualquer referência de ID
+        if (!externalRef && payload.data && payload.data.order_id) externalRef = payload.data.order_id;
+
+        console.log(`[WEBHOOK] Processing: Status=${status}, Ref=${externalRef}`);
+
+        // 3. Status Check
+        if (status !== 'approved' && status !== 'paid') {
+            console.log('[WEBHOOK] Ignored: Payment not approved/paid.');
+            return res.json({ status: 'ignored', reason: 'Status not approved' });
         }
+
+        // 4. Idempotency & Processing
+        if (!externalRef) {
+            console.error('[WEBHOOK] Sem external_reference. Impossível vincular.');
+            return res.status(400).json({ message: 'Missing metadata' });
+        }
+
+        const preRegId = externalRef;
+        const docRef = firestore.collection('pre_registrations').doc(preRegId);
+        const docSnap = await docRef.get();
+
+        if (!docSnap.exists) {
+            console.error('[WEBHOOK] Pre-registration not found:', preRegId);
+            return res.status(404).json({ message: 'Pre-registration not found' });
+        }
+
+        const preRegDoc = { id: docRef.id, ...docSnap.data() };
+
+        if (preRegDoc.status === 'completed') {
+            console.log('[WEBHOOK] Idempotency: Registration already completed.');
+            return res.json({ status: 'success', message: 'Already processed' });
+        }
+
+        // 5. Create Final User
+        // 5.1 Create Firebase Auth
+        let uid;
+        try {
+            const existingUser = await auth.getUserByEmail(preRegDoc.email);
+            uid = existingUser.uid;
+            await auth.updateUser(uid, { disabled: false });
+        } catch (authErr) {
+            if (authErr.code === 'auth/user-not-found') {
+                const newUser = await auth.createUser({
+                    email: preRegDoc.email,
+                    password: preRegDoc.password,
+                    displayName: preRegDoc.name,
+                    disabled: false
+                });
+                uid = newUser.uid;
+            } else {
+                throw authErr;
+            }
+        }
+
+        // 5.2 Create Firestore Profile
+        const finalUserData = {
+            name: preRegDoc.name,
+            email: preRegDoc.email,
+            role: preRegDoc.role,
+            plan_id: preRegDoc.plan_id,
+            cpf: preRegDoc.cpf || '',
+            phone: preRegDoc.phone || '',
+            instrument: preRegDoc.instrument || '',
+            status: 'active',
+            section: preRegDoc.section || 'student',
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            paymentId: payload.id || 'webhook_confirmed',
+            paymentMethod: 'infinitepay',
+            paymentDate: new Date().toISOString()
+        };
+
+        const userRef = firestore.collection('users').doc(uid);
+        await userRef.set(finalUserData, { merge: true });
+
+        // 5.3 Update Pre-Registration Status
+        await firestore.collection('pre_registrations').doc(preRegId).update({
+            status: 'completed',
+            uid: uid,
+            processedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        console.log(`[WEBHOOK] SUCCESS! User ${preRegDoc.email} fully activated.`);
+        res.json({ status: 'success', uid: uid });
+
     } catch (err) {
-        console.error('Webhook error:', err);
-        res.status(500).json({ status: 'error' });
+        console.error('[WEBHOOK] Critical Error:', err);
+        res.status(500).json({ status: 'error', error: err.message });
+    }
+});
+
+// --- ROTA DE GERAÇÃO DE LINK (InfinitePay) ---
+const axios = require('axios');
+app.post('/auth/generate-payment-link', async (req, res) => {
+    try {
+        const { pre_registration_id } = req.body;
+
+        if (!pre_registration_id) {
+            return res.status(400).json({ message: 'Pre-registration ID required' });
+        }
+
+        // 1. Busca dados do pré-cadastro
+        const docRef = firestore.collection('pre_registrations').doc(pre_registration_id);
+        const docSnap = await docRef.get();
+
+        if (!docSnap.exists) {
+            return res.status(404).json({ message: 'Pre-cadastro não encontrado' });
+        }
+
+        const data = docSnap.data();
+
+        // 2. Define Valor baseado no Plano
+        let amount = 19.90; // Default
+        if (data.plan_id === 2) amount = 59.90;
+        if (data.plan_id === 3) amount = 89.90;
+        if (data.plan_id === 4) amount = 119.90;
+        if (data.plan_id === 5) amount = 349.90;
+
+        // 3. Define Webhook URL
+        // Em produção, isso deve ser 'https://api.cifraprox.com/webhooks/infinitepay'
+        // Prioriza variável de ambiente. Se não existir, usa o host da requisição.
+        // InfinitePay EXIGE HTTPS.
+
+        const protocol = (req.get('host').includes('localhost') || req.get('host').includes('127.0.0.1')) ? 'http' : 'https';
+
+        const webhookUrl = process.env.WEBHOOK_BASE_URL
+            ? `${process.env.WEBHOOK_BASE_URL}/webhooks/infinitepay`
+            : `${protocol}://${req.get('host')}/webhooks/infinitepay`;
+
+        console.log('[PAYMENT] Gerando link para:', data.email, 'Valor:', amount, 'Webhook:', webhookUrl);
+
+        // 4. Chamada à API InfinitePay
+        // Endpoint v2 para Links (Exemplo baseado na documentação padrão)
+        const infinitePayUrl = 'https://api.infinitepay.io/v2/payment_links';
+
+        const payload = {
+            infinite_tag: "saulo-diogo", // Handle OBRIGATÓRIO
+            amount: amount,
+            title: `Assinatura CifraProX - ${data.role}`,
+            customer: {
+                email: data.email,
+                first_name: data.name.split(' ')[0],
+                last_name: data.name.split(' ').slice(1).join(' ') || 'User'
+            },
+            metadata: {
+                external_reference: pre_registration_id, // ID PRE-CADASTRO (Chave da Idempotência)
+                origin: "cifraprox_web"
+            },
+            webhook_url: webhookUrl // ONDE A MÁGICA ACONTECE
+        };
+
+        const response = await axios.post(infinitePayUrl, payload, {
+            headers: {
+                'Content-Type': 'application/json',
+                // Sem Authorization Bearer, pois usa infinite_tag no body
+            }
+        });
+
+        // 5. Retorna o Link gerado
+        // A resposta geralmente contém { url: "https://pay.infinitepay.io/..." }
+        const paymentUrl = response.data.url || response.data.link;
+
+        if (!paymentUrl) {
+            throw new Error('InfinitePay não retornou URL válida.');
+        }
+
+        // Atualiza pre-cadastro com o link gerado (opcional, bom para log)
+        await docRef.update({ paymentLink: paymentUrl, paymentAmount: amount });
+
+        res.json({ url: paymentUrl });
+
+    } catch (error) {
+        console.error('[PAYMENT-GEN] Erro:', error.response ? error.response.data : error.message);
+        // Fallback para MVP: Se a API falhar (ex: localhost não aceito), retorna link estático
+        // MAS avisa que é fallback.
+        console.warn('Usando Link Estático como Fallback (API falhou).');
+        res.json({
+            url: 'https://invoice.infinitepay.io/plans/saulo-diogo/1nBPlUHLod',
+            warning: 'API Error - Static Link Used'
+        });
     }
 });
 app.post('/auth/login', async (req, res) => {

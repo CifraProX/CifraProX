@@ -1,6 +1,8 @@
 @echo off
-echo Iniciando servidor local CifraProX...
-echo O navegador abrira automaticamente. Se nao abrir, acesse: http://localhost:8080
+echo Iniciando servidor Backend + Frontend (CifraProX)...
+echo O navegador nao abrira automaticamente, mas o servidor estara ouvindo.
+echo Acesse: http://localhost:3000
 echo.
-call npx http-server -c-1 --cors -o
+cd backend
+npm start
 pause

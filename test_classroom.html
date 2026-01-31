@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Teste Classroom Link</title>
+    <script>
+        // Simular o que deveria acontecer
+        window.onload = function () {
+            const hash = window.location.hash;
+            console.log('Hash:', hash);
+
+            if (hash.startsWith('#classroom/')) {
+                const id = hash.split('/')[1];
+                console.log('Classroom ID:', id);
+                alert('Modal deveria aparecer para sala: ' + id);
+            }
+        };
+    </script>
+</head>
+
+<body>
+    <h1>Teste de Link da Sala</h1>
+    <p>Abra o console (F12) para ver os logs</p>
+    <p>URL atual: <span id="url"></span></p>
+    <script>
+        document.getElementById('url').textContent = window.location.href;
+    </script>
+</body>
+
+</html>
