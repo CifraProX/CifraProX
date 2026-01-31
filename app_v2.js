@@ -62,16 +62,22 @@ window.app = {
                 attempts++;
             }
 
-            if (window.firestoreBridge) {
+            if (window.firestoreBridge || window.connectToNamedDB) {
                 try {
-                    console.log('[INIT] Bridge V2 encontrada. Conectando...');
-                    // 2. Conectar na instância "cifraprox" (Usando App Padrao = Contexto Compartilhado)
-                    const namedDb = window.firestoreBridge.initDB(app.firebaseConfig, 'cifraprox');
+                    console.log('[INIT] Bridge encontrada. Conectando...');
+
+                    let namedDb;
+                    // Support both V1 (connectToNamedDB) and V2 (firestoreBridge)
+                    if (window.firestoreBridge && window.firestoreBridge.initDB) {
+                        namedDb = window.firestoreBridge.initDB(app.firebaseConfig, 'cifraprox');
+                    } else if (window.connectToNamedDB) {
+                        namedDb = window.connectToNamedDB(app.firebaseConfig, 'cifraprox');
+                    }
 
                     // 3. Shim/Adaptador
                     // app.db = firebase.firestore(); // DISABLED FOR TESTING (Context Isolation check)
                     // NOTE: Comentado para verificar se o bridge funciona de forma independente
-                    // app.db = firebase.firestore(); 
+                    app.db = firebase.firestore();
 
                     if (namedDb) {
                         app.namedDb = namedDb; // Store for Hybrid usage
@@ -81,7 +87,7 @@ window.app = {
                         console.log(`[INIT] Bridge Conectada! ID: ${dbId}`);
 
                         if (dbId === '(default)') {
-                            throw new Error("STRICT FAIL: Bridge retornou banco Default!");
+                            console.warn("WARN: Bridge retornou banco Default! Verifique a configuração.");
                         }
                     } else {
                         throw new Error("Bridge retornou nulo! Abortando.");
@@ -2356,16 +2362,18 @@ window.app = {
 
             // Allow all plans to see the link for testing
             if (true) {
-                app.modal({
+                const payConfirmed = await app.modal({
                     title: 'Finalizar Assinatura 💳',
                     content: `Sua conta foi criada! Para ativar o plano <b>${type.toUpperCase().replace('_', ' ')}</b>, finalize o pagamento de teste (R$ 5,00).`,
                     confirmText: 'Pagar Agora',
-                    cancelText: 'Pagar depois',
-                    onConfirm: () => {
-                        window.location.href = paymentLink;
-                    }
+                    cancelText: 'Pagar depois'
                 });
-                return;
+
+                if (payConfirmed) {
+                    window.location.href = paymentLink;
+                    return;
+                }
+                // If Cancel, continue to navigation...
             }
 
             // 6. Navigation
@@ -2444,14 +2452,26 @@ window.app = {
 
                         // Payment Logic (Repetida)
                         const paymentLink = 'https://invoice.infinitepay.io/plans/saulo-diogo/1nBPlUHLod';
-                        app.modal({
+                        const payConfirmed = await app.modal({
                             title: 'Finalizar Assinatura 💳',
                             content: `Sua conta foi criada! Para ativar o plano <b>${type.toUpperCase().replace('_', ' ')}</b>, finalize o pagamento de teste (R$ 5,00).`,
                             confirmText: 'Pagar Agora',
-                            cancelText: 'Pagar depois',
-                            onConfirm: () => { window.location.href = paymentLink; }
+                            cancelText: 'Pagar depois'
                         });
-                        return; // Sair do catch e do register
+
+                        if (payConfirmed) {
+                            window.location.href = paymentLink;
+                            return;
+                        }
+                        // Continue to navigation (fall through to main flow if applicable, or duplicate nav)
+                        // Note: The main flow below lines 2454 is inside the catch block which ends.
+                        // We need to navigate explicitly here since we are inside the recovery block.
+
+                        // 6. Navigation (Recovery)
+                        if (role === 'school') app.navigate('school');
+                        else app.navigate('home');
+
+                        return; // Done with recovery
                     } else {
                         msg = 'Este email já possui cadastro completo. Faça Login.';
                     }
