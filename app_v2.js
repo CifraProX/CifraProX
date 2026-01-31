@@ -2347,7 +2347,7 @@ window.app = {
                 instrument: instrument,
                 status: 'active', // Active default for now, or 'pending_payment'
                 section: role === 'admin' ? 'admin' : 'student',
-                createdAt: dbUtils.serverTimestamp() // Use modular API
+                createdAt: new Date().toISOString() // Default SAFE (será aprimorado no bloco try/catch se possível)
             };
 
             // 3. DIRECT FIRESTORE PROFILE CREATION (Legacy/Robust Flow)
@@ -2366,8 +2366,13 @@ window.app = {
 
                 const userRef = doc(app.namedDb, 'users', uid);
 
-                // Add Timestamp
-                userData.createdAt = serverTimestamp();
+                // Add Timestamp Safe Check
+                if (serverTimestamp && typeof serverTimestamp === 'function') {
+                    userData.createdAt = serverTimestamp();
+                } else {
+                    console.warn('[REGISTER] serverTimestamp indisponível. Usando data local (Fallback).');
+                    userData.createdAt = new Date().toISOString();
+                }
 
                 // Write with MERGE to play nice with Cloud Functions
                 await setDoc(userRef, userData, { merge: true });
@@ -2480,8 +2485,13 @@ window.app = {
                             const { doc, setDoc, serverTimestamp } = dbUtilsRec;
                             console.log("%c [RECOVERY] Usando Banco NOMEADO", "background: #059669; color: white;");
 
-                            // Sobrescreve com ServerTimestamp MODULAR correto
-                            userData.createdAt = serverTimestamp();
+                            // Sobrescreve com ServerTimestamp MODULAR correto (SAFE)
+                            if (serverTimestamp && typeof serverTimestamp === 'function') {
+                                userData.createdAt = serverTimestamp();
+                            } else {
+                                console.warn('[RECOVERY] serverTimestamp indisponível. Usando data local.');
+                                userData.createdAt = new Date().toISOString();
+                            }
 
                             await setDoc(doc(app.namedDb, 'users', uid), userData);
                         } else {
