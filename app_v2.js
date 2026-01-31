@@ -2480,16 +2480,22 @@ window.app = {
                             instrument: instrument,
                             status: 'active',
                             section: role === 'admin' ? 'admin' : 'student',
-                            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                            // CORREÇÃO: Inicializa com data string ISO segura para evitar erro de tipos mistos
+                            // O timestamp do servidor será aplicado no setDoc se disponível
+                            createdAt: new Date().toISOString()
                         };
 
                         if (app.namedDb && dbUtilsRec) {
-                            const { doc, setDoc } = dbUtilsRec;
+                            const { doc, setDoc, serverTimestamp } = dbUtilsRec;
                             console.log("%c [RECOVERY] Usando Banco NOMEADO", "background: #059669; color: white;");
+
+                            // Sobrescreve com ServerTimestamp MODULAR correto
+                            userData.createdAt = serverTimestamp();
 
                             await setDoc(doc(app.namedDb, 'users', uid), userData);
                         } else {
                             // STRICT MODE: NO FALLBACK
+                            // Se cair aqui, a data ISO será usada (mas vai falhar no throw abaixo de qualquer jeito)
                             throw new Error("ERRO CRÍTICO: Conexão com banco 'cifraprox' perdida na Recuperação.");
                         }
 
