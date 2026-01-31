@@ -84,10 +84,11 @@ window.app = {
 
                         // Sanity Check
                         const dbId = namedDb._databaseId ? namedDb._databaseId.database : (namedDb.databaseId || 'unknown');
-                        console.log(`[INIT] Bridge Conectada! ID: ${dbId}`);
+                        console.log(`%c [INIT] Bridge Conectada! ID: ${dbId}`, 'background: blue; color: white; font-size: 14px');
 
                         if (dbId === '(default)') {
                             console.warn("WARN: Bridge retornou banco Default! Verifique a configuração.");
+                            alert("DEBUG: O App conectou no banco '(default)' ao invés de 'cifraprox'.");
                         }
                     } else {
                         throw new Error("Bridge retornou nulo! Abortando.");
@@ -209,6 +210,28 @@ window.app = {
             document.body.innerHTML = `<div style="color:red; padding:20px;">ERRO FATAL: ${error.message}</div>`;
             console.error(error);
         }
+    },
+
+    debugApp: () => {
+        console.log("=== DIAGNÓSTICO DO APP ===");
+        console.log("1. Configuração Firebase:", app.firebaseConfig);
+        console.log("2. Auth Compat (app.auth):", app.auth ? app.auth.currentUser : 'N/A');
+
+        if (app.namedDb) {
+            console.log("3. Banco NOMEADO (app.namedDb): CONECTADO");
+            console.log("   - DB ID:", app.namedDb._databaseId ? app.namedDb._databaseId.database : 'unknown');
+            console.log("   - App Name:", app.namedDb.app.name);
+            if (window.firestoreBridge && window.firestoreBridge.utils) {
+                const authMod = window.firestoreBridge.utils.getAuth(app.namedDb.app);
+                console.log("   - Auth Modular (Linked):", authMod.currentUser);
+            }
+        } else {
+            console.log("3. Banco NOMEADO: DESCONECTADO (!!!)");
+        }
+
+        console.log("4. User State (app.state.user):", app.state.user);
+        console.log("5. LocalStorage Token:", localStorage.getItem('token'));
+        console.log("============================");
     },
 
     navigate: async (view, param = null, addToHistory = true) => {
@@ -2275,8 +2298,19 @@ window.app = {
         }
 
         try {
-            // 1. Create Auth User
-            const userCredential = await app.auth.createUserWithEmailAndPassword(email, password);
+            // 1. Create Auth User (HYBRID FIX: Use Modular Auth if valid, to share context with NamedDB)
+            let userCredential;
+            let dbUtils = (window.firestoreBridge && window.firestoreBridge.utils) ? window.firestoreBridge.utils : window.firestoreUtils;
+
+            if (app.namedDb && dbUtils && dbUtils.getAuth) {
+                console.log('[REGISTER] Usando Auth Modular (Bridge) para garantir contexto...');
+                const auth = dbUtils.getAuth(); // Get auth from the SAME app as the DB
+                userCredential = await dbUtils.createUserWithEmailAndPassword(auth, email, password);
+            } else {
+                console.warn('[REGISTER] Auth Modular indisponível. Usando Compat (Pode causar erro de permissão no Banco).');
+                userCredential = await app.auth.createUserWithEmailAndPassword(email, password);
+            }
+
             const uid = userCredential.user.uid;
 
             // 2. Determine Role & Plan ID
@@ -2301,7 +2335,7 @@ window.app = {
             }
 
             // 3. Create Firestore Profile
-            let dbUtils = (window.firestoreBridge && window.firestoreBridge.utils) ? window.firestoreBridge.utils : window.firestoreUtils;
+            // dbUtils already resolved above
 
             // Create userData with modular API timestamp
             const userData = {
@@ -2318,25 +2352,41 @@ window.app = {
             };
 
             // 3. DIRECT FIRESTORE PROFILE CREATION (Legacy/Robust Flow)
-            // Writing immediately to ensure consistency and avoid auth-state race conditions
-            console.log('[REGISTER] Criando perfil no Firestore...');
+            console.log('%c [REGISTER] Iniciando gravação no Firestore...', 'color: orange; font-weight: bold;');
 
             try {
                 // Determine DB Utils (Bridge)
-                const { doc, setDoc, serverTimestamp } = window.firestoreBridge.utils;
+                const { doc, setDoc, serverTimestamp } = dbUtils;
+
+                // DIAGNÓSTICO DO BANCO DE DADOS
+                if (app.namedDb) {
+                    const dbName = app.namedDb._databaseId ? app.namedDb._databaseId.database : (app.namedDb.databaseId || 'unknown');
+                    console.log(`%c [DEBUG CRÍTICO] Tentando salvar no banco: ${dbName}`, 'background: red; color: white; font-size: 14px;');
+
+                    if (dbName === '(default)') {
+                        alert("ALERTA DE DEBUG: O sistema está conectado ao banco '(default)', mas deveria ser 'cifraprox'. Verifique seu Console do Firebase no banco '(default)'.");
+                    } else if (dbName === 'cifraprox') {
+                        console.log("%c [SUCESSO] Conectado ao banco correto: cifraprox", "background: green; color: white;");
+                    }
+                } else {
+                    console.error("[DEBUG CRÍTICO] app.namedDb está NULO! Salvando no db default (fallback).");
+                }
+
                 const userRef = doc(app.namedDb, 'users', uid);
 
                 // Add Timestamp
                 userData.createdAt = serverTimestamp();
 
-                // Write with MERGE to play nice with Cloud Functions
+                // Write with MERGE
                 await setDoc(userRef, userData, { merge: true });
-                console.log('[REGISTER] Perfil criado com sucesso (Direct Write)');
+                console.log('%c [REGISTER] DOC ESCRITO COM SUCESSO!', 'background: green; color: white; font-size: 16px;');
+                console.log('Dados gravados:', userData);
 
             } catch (dbError) {
-                console.error('[REGISTER] Falha na criação primária do perfil:', dbError);
-                // Fallback: Cloud Function will likely handle it via onCreate trigger
-                console.warn('[REGISTER] Confiando na Cloud Function como fallback.');
+                console.error('[REGISTER] ERRO AO GRAVAR NO BANCO:', dbError);
+                alert(`ERRO DE GRAVAÇÃO: ${dbError.message}`);
+                // Não engolir o erro silenciosamente durante debug
+                throw dbError;
             }
 
             console.log('[REGISTER] Auth e Perfil processados.');
