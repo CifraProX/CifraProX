@@ -84,11 +84,10 @@ window.app = {
 
                         // Sanity Check
                         const dbId = namedDb._databaseId ? namedDb._databaseId.database : (namedDb.databaseId || 'unknown');
-                        console.log(`%c [INIT] Bridge Conectada! ID: ${dbId}`, 'background: blue; color: white; font-size: 14px');
+                        console.log(`[INIT] Bridge Conectada! ID: ${dbId}`);
 
                         if (dbId === '(default)') {
                             console.warn("WARN: Bridge retornou banco Default! Verifique a configuração.");
-                            alert("DEBUG: O App conectou no banco '(default)' ao invés de 'cifraprox'.");
                         }
                     } else {
                         throw new Error("Bridge retornou nulo! Abortando.");
@@ -2352,24 +2351,17 @@ window.app = {
             };
 
             // 3. DIRECT FIRESTORE PROFILE CREATION (Legacy/Robust Flow)
-            console.log('%c [REGISTER] Iniciando gravação no Firestore...', 'color: orange; font-weight: bold;');
+            // Writing immediately to ensure consistency and avoid auth-state race conditions
+            console.log('[REGISTER] Criando perfil no Firestore...');
 
             try {
                 // Determine DB Utils (Bridge)
                 const { doc, setDoc, serverTimestamp } = dbUtils;
 
-                // DIAGNÓSTICO DO BANCO DE DADOS
+                // DIAGNÓSTICO DO BANCO DE DADOS (Silent Check)
                 if (app.namedDb) {
                     const dbName = app.namedDb._databaseId ? app.namedDb._databaseId.database : (app.namedDb.databaseId || 'unknown');
-                    console.log(`%c [DEBUG CRÍTICO] Tentando salvar no banco: ${dbName}`, 'background: red; color: white; font-size: 14px;');
-
-                    if (dbName === '(default)') {
-                        alert("ALERTA DE DEBUG: O sistema está conectado ao banco '(default)', mas deveria ser 'cifraprox'. Verifique seu Console do Firebase no banco '(default)'.");
-                    } else if (dbName === 'cifraprox') {
-                        console.log("%c [SUCESSO] Conectado ao banco correto: cifraprox", "background: green; color: white;");
-                    }
-                } else {
-                    console.error("[DEBUG CRÍTICO] app.namedDb está NULO! Salvando no db default (fallback).");
+                    console.log(`[REGISTER] Salvando em banco: ${dbName}`);
                 }
 
                 const userRef = doc(app.namedDb, 'users', uid);
@@ -2377,15 +2369,14 @@ window.app = {
                 // Add Timestamp
                 userData.createdAt = serverTimestamp();
 
-                // Write with MERGE
+                // Write with MERGE to play nice with Cloud Functions
                 await setDoc(userRef, userData, { merge: true });
-                console.log('%c [REGISTER] DOC ESCRITO COM SUCESSO!', 'background: green; color: white; font-size: 16px;');
-                console.log('Dados gravados:', userData);
+                console.log('[REGISTER] Módulo de perfil salvo.');
 
             } catch (dbError) {
-                console.error('[REGISTER] ERRO AO GRAVAR NO BANCO:', dbError);
-                alert(`ERRO DE GRAVAÇÃO: ${dbError.message}`);
-                // Não engolir o erro silenciosamente durante debug
+                console.error('[REGISTER] Falha na criação primária do perfil:', dbError);
+                // ALERT: Não engolir erro durante debug crítico
+                alert(`ERRO CRÍTICO AO SALVAR PERFIL: ${dbError.message}`);
                 throw dbError;
             }
 

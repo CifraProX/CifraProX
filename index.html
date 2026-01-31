@@ -1446,7 +1446,7 @@ B|---1---..." oninput="app.updateTabsPreview()"></textarea>
     <!-- BRIDGE: Modular SDK para Banco Nomeado (Firestore) -->
     <script type="module">
         import { initializeApp, getApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
-        import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, getDocs, onSnapshot, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+        import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, getDocs, onSnapshot, query, orderBy, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
         window.connectToNamedDB = (config, dbName) => {
@@ -1470,7 +1470,7 @@ B|---1---..." oninput="app.updateTabsPreview()"></textarea>
 
         // Expose Utils for app.js
         window.firestoreUtils = {
-            doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, getDocs, onSnapshot, query, orderBy, getFirestore,
+            doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, getDocs, onSnapshot, query, orderBy, serverTimestamp, getFirestore,
             getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, initializeApp
         };
     </script>
