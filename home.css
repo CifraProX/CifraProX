@@ -1,0 +1,76 @@
+/* Home Specific Styles */
+:root {
+    --primary: #10b981;
+    --primary-dark: #059669;
+    --background-light: #f8f9f8;
+    --background-dark: #0f172a;
+    --management: #061a15;
+}
+
+body {
+    background-color: var(--background-light);
+    color: #1e293b;
+    font-family: 'Inter', sans-serif;
+    transition: background-color 0.3s, color 0.3s;
+}
+
+.dark body {
+    background-color: var(--background-dark);
+    color: #f8fafc;
+}
+
+/* Card Styling */
+.cifra-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+}
+
+.dark .cifra-card {
+    background: #1e293b;
+    border-color: #334155;
+}
+
+.cifra-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.1);
+    border-color: var(--primary);
+}
+
+/* Card Actions (Star, Edit) */
+.card-action {
+    opacity: 0.2;
+    transition: all 0.2s;
+}
+
+.cifra-card:hover .card-action {
+    opacity: 1;
+}
+
+.card-action:hover {
+    color: var(--primary);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 10px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+    background: #334155;
+}
+
+/* Custom transitions */
+.transition-all {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}

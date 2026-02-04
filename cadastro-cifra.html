@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="pt-br" class="light">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CifraProX - Cadastro de Cifras</title>
+
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com" rel="preconnect" />
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Icons+Round" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0"
+        rel="stylesheet" />
+
+    <!-- Tailwind Config -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#10b981",
+                        "primary-dark": "#059669",
+                        "background-light": "#f8f9f8",
+                        "background-dark": "#0f172a",
+                    },
+                    fontFamily: {
+                        display: ["Outfit", "Inter", "sans-serif"],
+                        sans: ["Inter", "sans-serif"],
+                    },
+                },
+            },
+        };
+    </script>
+    <link rel="stylesheet" href="cadastro-cifra.css">
+</head>
+
+<body
+    class="bg-background-light dark:bg-background-dark text-slate-800 dark:text-slate-200 font-sans transition-colors duration-300">
+
+    <div id="app" class="h-screen flex flex-col w-full overflow-hidden">
+        <!-- Navbar -->
+        <nav
+            class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 py-3 sticky top-0 z-30 flex justify-between items-center shadow-sm">
+            <div class="flex items-center gap-3">
+                <button onclick="location.href='home.html'"
+                    class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors flex items-center gap-2 group">
+                    <span
+                        class="material-icons-round text-slate-400 group-hover:text-red-500 transition-colors">arrow_back</span>
+                    <span
+                        class="text-xs font-bold text-slate-400 group-hover:text-slate-600 dark:group-hover:text-white transition-colors">SAIR</span>
+                </button>
+                <div class="h-6 w-[1px] bg-slate-200 dark:bg-slate-700 mx-1"></div>
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-rounded text-primary text-3xl">music_note</span>
+                    <h1 class="font-display font-bold text-xl text-slate-800 dark:text-white leading-tight">CifraProX
+                    </h1>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <button onclick="app.toggleTheme()"
+                    class="p-2 mr-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                    <span class="material-icons-round theme-icon">dark_mode</span>
+                </button>
+                <button type="button" onclick="app.importFromCifraClub()"
+                    class="hidden md:flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 rounded-xl font-bold text-sm transition-all border border-emerald-100 dark:border-emerald-500/20">
+                    <span class="material-icons-round text-lg">cloud_download</span>
+                    Importar do Cifra Club
+                </button>
+                <button type="submit" form="editor-form"
+                    class="flex items-center gap-2 px-6 py-2 bg-primary hover:bg-emerald-600 text-white rounded-xl font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95">
+                    <span class="material-icons-round text-lg">save</span>
+                    Salvar Cifra
+                </button>
+            </div>
+        </nav>
+
+        <main class="flex-1 flex flex-col overflow-hidden">
+            <form id="editor-form" onsubmit="app.saveCifra(event)" class="h-full flex flex-col md:flex-row">
+                <!-- LADO ESQUERDO: CONTROLES E TEXTO -->
+                <div
+                    class="w-full md:w-1/2 flex flex-col border-r border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden">
+
+                    <!-- Cabeçalho de Metadados -->
+                    <div class="p-4 space-y-4 border-b border-slate-100 dark:border-slate-700/50">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="space-y-1">
+                                <label class="text-[10px] uppercase font-bold text-slate-400 ml-1">Título da
+                                    Música</label>
+                                <input name="title" id="edit-title" required
+                                    class="w-full bg-slate-50 dark:bg-slate-900 border-transparent focus:border-primary focus:ring-0 rounded-xl px-4 py-2.5 font-bold text-slate-700 dark:text-white"
+                                    placeholder="Ex: Tempo Perdido">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-[10px] uppercase font-bold text-slate-400 ml-1">Artista /
+                                    Banda</label>
+                                <input name="artist" id="edit-artist" required
+                                    class="w-full bg-slate-50 dark:bg-slate-900 border-transparent focus:border-primary focus:ring-0 rounded-xl px-4 py-2.5 font-bold text-slate-700 dark:text-white"
+                                    placeholder="Ex: Legião Urbana">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div class="space-y-1">
+                                <label class="text-[10px] uppercase font-bold text-slate-400 ml-1">Tom</label>
+                                <input name="tom" id="edit-tom" placeholder="G" required
+                                    class="w-full bg-slate-50 dark:bg-slate-900 border-transparent focus:border-primary focus:ring-0 rounded-xl px-3 py-2 text-center font-mono font-bold">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-[10px] uppercase font-bold text-slate-400 ml-1">Capo</label>
+                                <select name="capo" id="edit-capo"
+                                    class="w-full bg-slate-50 dark:bg-slate-900 border-transparent focus:border-primary focus:ring-0 rounded-xl px-2 py-2 text-sm">
+                                    <option value="">Sem Capo</option>
+                                    <option value="1ª Casa">1ª Casa</option>
+                                    <option value="2ª Casa">2ª Casa</option>
+                                    <option value="3ª Casa">3ª Casa</option>
+                                    <option value="4ª Casa">4ª Casa</option>
+                                    <option value="5ª Casa">5ª Casa</option>
+                                </select>
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-[10px] uppercase font-bold text-slate-400 ml-1">BPM</label>
+                                <input name="bpm" id="edit-bpm" type="number" placeholder="120"
+                                    class="w-full bg-slate-50 dark:bg-slate-900 border-transparent focus:border-primary focus:ring-0 rounded-xl px-3 py-2 text-center font-mono">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-[10px] uppercase font-bold text-slate-400 ml-1">Gênero</label>
+                                <select name="genre" id="edit-genre" required
+                                    class="w-full bg-slate-50 dark:bg-slate-900 border-transparent focus:border-primary focus:ring-0 rounded-xl px-3 py-2 text-sm appearance-none cursor-pointer">
+                                    <option value="">Escolha...</option>
+                                    <option value="Sertanejo">Sertanejo</option>
+                                    <option value="Pop">Pop</option>
+                                    <option value="Rock">Rock</option>
+                                    <option value="MPB">MPB</option>
+                                    <option value="Gospel">Gospel</option>
+                                    <option value="Outros">Outros</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Editor Tabs -->
+                    <div class="flex-1 flex flex-col overflow-hidden">
+                        <div class="flex border-b border-slate-100 dark:border-slate-700">
+                            <button type="button" onclick="app.setEditorTab('lyrics')"
+                                class="flex-1 py-3 text-xs font-bold uppercase tracking-wider border-b-2 border-primary text-primary transition-all"
+                                id="tab-lyrics">Letra e Acordes</button>
+                            <button type="button" onclick="app.setEditorTab('tabs')"
+                                class="flex-1 py-3 text-xs font-bold uppercase tracking-wider border-b-2 border-transparent text-slate-400 transition-all"
+                                id="tab-tabs">Tablaturas</button>
+                        </div>
+
+                        <!-- Editor Area -->
+                        <div id="editor-lyrics-area" class="flex-1 flex flex-col p-4 relative overflow-y-auto">
+                            <textarea name="content" id="edit-content"
+                                class="flex-1 w-full font-mono text-sm bg-transparent border-none focus:ring-0 p-0 resize-none leading-relaxed"
+                                placeholder="Cole aqui a letra e os acordes..."
+                                oninput="app.updatePreview()"></textarea>
+                        </div>
+
+                        <div id="editor-tabs-area" class="hidden flex-1 flex flex-col p-4 overflow-y-auto">
+                            <textarea name="tabs" id="edit-tabs"
+                                class="flex-1 w-full font-mono text-xs bg-slate-50 dark:bg-slate-900/50 border-none focus:ring-0 rounded-xl p-4 resize-none leading-tight"
+                                placeholder="Tablaturas aqui..."></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Link Fields -->
+                    <div
+                        class="p-4 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-700 space-y-3">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="space-y-1">
+                                <label class="text-[10px] uppercase font-bold text-slate-400 ml-1">Link Vídeo Aula
+                                    (YouTube)</label>
+                                <input name="youtubeTraining" id="edit-youtube-training"
+                                    class="w-full bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-sm"
+                                    placeholder="https://youtube.com/watch?v=...">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-[10px] uppercase font-bold text-slate-400 ml-1">Link Performance
+                                    (YouTube)</label>
+                                <input name="youtube" id="edit-youtube"
+                                    class="w-full bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-sm"
+                                    placeholder="https://youtube.com/watch?v=...">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- LADO DIREITO: PREVIEW -->
+                <div class="hidden md:flex md:w-1/2 flex-col bg-slate-50 dark:bg-slate-900 overflow-hidden relative">
+                    <div class="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700">
+                        <div
+                            class="px-3 py-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur shadow-sm rounded-full border border-slate-200 dark:border-slate-700">
+                            <span class="text-[10px] font-bold text-primary uppercase flex items-center gap-1">
+                                <span class="w-2 h-2 bg-primary rounded-full animate-pulse"></span> Visualização
+                            </span>
+                        </div>
+                    </div>
+                    <div id="edit-preview"
+                        class="flex-1 overflow-y-auto p-8 font-mono text-sm leading-relaxed whitespace-pre text-slate-800 dark:text-slate-200">
+                        <!-- Preview renderizado aqui -->
+                    </div>
+                </div>
+            </form>
+        </main>
+    </div>
+
+    <!-- Firebase SDKs (Compat) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+    <!-- BRIDGE: Modular SDK para Banco Nomeado -->
+    <script type="module">
+        import { initializeApp, getApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+        import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, collection, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+        window.connectToNamedDB = (config, dbName) => {
+            let app = getApps().length > 0 ? getApp() : initializeApp(config);
+            return getFirestore(app, dbName);
+        };
+
+        window.firestoreUtils = { doc, getDoc, setDoc, addDoc, updateDoc, collection, serverTimestamp };
+    </script>
+
+    <script src="transposition.js"></script>
+    <script src="cadastro-cifra.js"></script>
+</body>
+
+</html>
