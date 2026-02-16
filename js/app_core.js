@@ -254,6 +254,26 @@ window.app = {
             return;
         }
 
+        // GUEST STRICT GUARD (New)
+        if (app.state.user && app.state.user.isGuest) {
+            const allowedViews = ['classroom', 'cifra'];
+            if (!allowedViews.includes(view)) {
+                console.log('[NAVIGATE] Guest attempted to access restricted view:', view);
+                // Redirect back to classroom if possible, otherwise stay or alert
+                if (app.state.currentClassroomCode || app.state.pendingClassroomId) {
+                    const target = app.state.currentClassroomCode || app.state.pendingClassroomId;
+                    if (view !== 'classroom') { // Avoid infinite loop if already failing classroom load
+                        app.navigate('classroom', target, false);
+                    }
+                } else {
+                    // Critical edge case: Guest with no classroom? Logout or show modal?
+                    // For now, let's allow them to see the "Join" modal on Home if they are lost
+                    if (view !== 'home') app.navigate('home', null, false);
+                }
+                return;
+            }
+        }
+
         // Update State
         app.state.currentView = view;
 
@@ -356,8 +376,10 @@ window.app = {
         const adminLinks = document.querySelectorAll('[id^="admin-link-container"]');
         const schoolLink = document.getElementById('sidebar-school-link');
         const profileLink = document.getElementById('sidebar-profile-link');
+        const homeLink = document.getElementById('sidebar-home-link');
         const btnNewCifra = document.getElementById('btn-new-cifra');
         const btnNewClassroom = document.getElementById('btn-new-classroom');
+        const btnBackClassroom = document.getElementById('classroom-back-btn');
 
         // 1. Admin Links
         adminLinks.forEach(el => {
@@ -372,12 +394,16 @@ window.app = {
         if (user && user.isGuest) {
             if (schoolLink) schoolLink.classList.add('hidden');
             if (profileLink) profileLink.classList.add('hidden');
+            if (homeLink) homeLink.classList.add('hidden'); // Hide Home
             if (btnNewCifra) btnNewCifra.classList.add('hidden');
             if (btnNewClassroom) btnNewClassroom.classList.add('hidden');
+            if (btnBackClassroom) btnBackClassroom.classList.add('hidden'); // Hide Back Button in Classroom
         } else {
             if (schoolLink) schoolLink.classList.remove('hidden');
             if (profileLink) profileLink.classList.remove('hidden');
+            if (homeLink) homeLink.classList.remove('hidden');
             if (btnNewCifra) btnNewCifra.classList.remove('hidden');
+            if (btnBackClassroom) btnBackClassroom.classList.remove('hidden');
             // btnNewClassroom logic is below (Student vs Teacher)
         }
 
