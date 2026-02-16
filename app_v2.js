@@ -165,6 +165,12 @@ function initializeApp() {
                             setTimeout(() => app.loadSchoolDashboard(), 800);
                         }
 
+                        // FIX: Reload Classroom View if we are already on that view (e.g. page refresh)
+                        if (app.state.currentView === 'classroom' && app.state.currentClassroomCode) {
+                            console.log('[AUTH STATE] Reloading Classroom View to fix race condition...');
+                            setTimeout(() => app.loadClassroom(app.state.currentClassroomCode), 500);
+                        }
+
                         // Sync State from LocalStorage if available (Optimistic)
                         // Note: Real user data loading should happen via loadHeader or separate listener
                     } else {
@@ -338,14 +344,24 @@ function initializeApp() {
             // Special handling for classroom view
             if (view === 'classroom') {
                 console.log('[NAVIGATE] Classroom view detected! Param:', param, 'User:', app.state.user);
-                if (!app.state.user) {
+
+                // DATA: Force Join Modal for Guests (so they can optionally Login)
+                // Exception: If they just completed the Join flow (justJoined flag)
+                const isGuest = app.state.user && app.state.user.role === 'guest';
+                const justJoined = app.state.justJoined;
+                app.state.justJoined = false; // Reset flag
+
+                if ((!app.state.user || isGuest) && !justJoined) {
                     // Guest trying to access - show join modal
-                    console.log('[NAVIGATE] No user logged in, showing join modal...');
+                    console.log('[NAVIGATE] User is guest/null, showing join modal...');
+                    // Clear main content to avoid ghosting
+                    const main = document.getElementById('app');
+                    if (main) main.innerHTML = '';
                     app.showJoinClassroomModal(param);
                     return;
                 }
-                // Logged in user - proceed to classroom
-                console.log('[NAVIGATE] User logged in, joining classroom...');
+                // Logged in user (or confirmed Guest) - proceed to classroom
+                console.log('[NAVIGATE] User logged in/confirmed, joining classroom...');
                 app.state.currentView = view; // FIX: Update state before joining
                 app.joinClassroom(param, 'user');
                 return;

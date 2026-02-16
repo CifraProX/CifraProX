@@ -111,6 +111,38 @@ app.redirectToLogin = () => {
     app.navigate('login');
 };
 
+app.loginAsGuest = async (guestName) => {
+    if (!guestName) return;
+
+    console.log('[AUTH] Logging in as Guest:', guestName);
+
+    // MOCK ANONYMOUS AUTH (Phase 1)
+    // In Phase 2, this would be: await firebase.auth().signInAnonymously();
+
+    const guestUser = {
+        uid: 'guest_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+        name: guestName,
+        email: null,
+        role: 'guest',
+        isGuest: true,
+        photoURL: null
+    };
+
+    // Update State
+    app.state.user = guestUser;
+
+    // Persist simple session (if we want to survive refresh without real auth)
+    // For now, app_core.js handles restoring "guestName" from localStorage, 
+    // but better to have a session marker.
+    localStorage.setItem('guest_session', JSON.stringify(guestUser));
+
+    // UI Feedback
+    app.showToast(`Bem-vindo, ${guestName}! (Modo Visitante)`);
+    app.updateHeader();
+
+    return guestUser;
+};
+
 app.register = async (e) => {
     e.preventDefault();
     const btn = e.target.querySelector('button[type="submit"]');
@@ -168,6 +200,7 @@ app.logout = () => {
     app.auth.signOut().then(() => {
         app.showToast('Você saiu.');
         localStorage.removeItem('token');
+        localStorage.removeItem('guest_session'); // Clear Guest Session
         app.navigate('login');
     });
 };

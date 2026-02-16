@@ -3,37 +3,29 @@ app.classroomConfig = {};
 
 // Helper to ensure Mock Data exists (for direct URL access)
 app.ensureMockClassrooms = () => {
-    if (!app.state.mockClassrooms) {
-        const savedMock = localStorage.getItem('cifraprox_mock_classrooms');
-        if (savedMock) {
-            app.state.mockClassrooms = JSON.parse(savedMock);
-        } else {
-            app.state.mockClassrooms = [
-                {
-                    name: 'Sala de Teste (Mock)',
-                    code: 'MOCK01',
-                    participantsCount: 12,
-                    status: 'active',
-                    ownerId: app.state.user ? app.state.user.uid : 'mock_user'
-                },
-                {
-                    name: 'Turma de Violão - Iniciante',
-                    code: 'VIOLAO',
-                    participantsCount: 5,
-                    status: 'active',
-                    ownerId: app.state.user ? app.state.user.uid : 'mock_user'
-                },
-                {
-                    name: 'Aula Antiga',
-                    code: 'OLD001',
-                    participantsCount: 20,
-                    status: 'closed',
-                    ownerId: app.state.user ? app.state.user.uid : 'mock_user'
-                }
-            ];
-            localStorage.setItem('cifraprox_mock_classrooms', JSON.stringify(app.state.mockClassrooms));
-        }
+    // Always load from storage or defaults
+    let mocks = [];
+    const savedMock = localStorage.getItem('cifraprox_mock_classrooms');
+
+    if (savedMock) {
+        mocks = JSON.parse(savedMock);
+    } else {
+        mocks = [
+            { name: 'Sala de Teste (Mock)', code: 'MOCK01', participantsCount: 12, status: 'active' },
+            { name: 'Turma de Violão - Iniciante', code: 'VIOLAO', participantsCount: 5, status: 'active' },
+            { name: 'Aula Antiga', code: 'OLD001', participantsCount: 20, status: 'closed' }
+        ];
     }
+
+    // FIX: FORCE OVERWRITE OWNERSHIP for default mocks to ensure security patch applies to existing users
+    mocks.forEach(m => {
+        if (['MOCK01', 'VIOLAO', 'OLD001'].includes(m.code)) {
+            m.ownerId = 'mock_user'; // Enforce strict non-ownership for logged in users
+        }
+    });
+
+    app.state.mockClassrooms = mocks;
+    localStorage.setItem('cifraprox_mock_classrooms', JSON.stringify(mocks));
 };
 
 // --- SCHOOL BOARD (Minhas Salas) ---
@@ -472,7 +464,7 @@ app.hideJoinClassroomModal = () => {
     app.state.pendingClassroomId = null;
 };
 
-app.joinAsGuest = () => {
+app.joinAsGuest = async () => {
     const nameInput = document.getElementById('guest-name-input');
     const guestName = nameInput ? nameInput.value.trim() : '';
 
@@ -482,16 +474,13 @@ app.joinAsGuest = () => {
         return;
     }
 
-    app.state.user = {
-        uid: 'guest_' + Date.now(),
-        name: guestName,
-        role: 'guest',
-        email: 'visitante@cifraprox.com',
-        isGuest: true
-    };
+    // Use Auth Module
+    await app.loginAsGuest(guestName);
 
-    localStorage.setItem('guestName', guestName);
     app.hideJoinClassroomModal();
+
+    // Flag to bypass Navigate Guard
+    app.state.justJoined = true;
 
     if (app.state.pendingClassroomId) {
         app.navigate('classroom', app.state.pendingClassroomId);
@@ -520,13 +509,35 @@ app.loadClassroom = async (classroomId) => {
         classroom = app.state.mockClassrooms.find(c => c.code === classroomId);
     }
 
+    // --- FIX: LOADING STATE GUARD ---
+    // If user is null but we have a token, we are likely restoring session.
+    // Don't show "Student/Guest" view yet. Show Loading.
+    const hasToken = localStorage.getItem('token');
+    if (!app.state.user && hasToken) {
+        console.log('[Classroom] Waiting for session restore...');
+        const container = document.getElementById('classroom-active-area');
+        if (container) {
+            container.innerHTML = `
+                <div class="flex items-center justify-center h-screen bg-slate-900 text-white flex-col gap-4">
+                    <span class="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></span>
+                    <p class="animate-pulse">Verificando permissões...</p>
+                </div>
+             `;
+            container.classList.remove('hidden');
+        }
+        return; // STOP EXECUTION HERE. Auth Listener will re-call this when ready.
+    }
+    // -------------------------------
+
     // Determine Role
     const currentUser = app.state.user || { uid: 'guest', role: 'guest' };
 
     // Fix for F5/Reload: If classroom is owned by 'mock_user' and we are logged in, assume ownership (for demo)
+    // FIX: Strict check. Only the actual owner sees Teacher View.
+    // Guests AND unconnected Teachers see Student View for MOCK rooms.
     const isOwner = classroom && (
-        classroom.ownerId === currentUser.uid ||
-        (classroom.ownerId === 'mock_user' && currentUser.uid !== 'guest')
+        classroom.ownerId === currentUser.uid
+        // REMOVED: || (classroom.ownerId === 'mock_user' && currentUser.role !== 'guest')
     );
 
     // UI References
@@ -541,12 +552,44 @@ app.loadClassroom = async (classroomId) => {
 
     // 2. Render Role View
     if (isOwner) {
+        // TEACHER VIEW
         if (teacherArea) teacherArea.classList.remove('hidden');
         if (studentArea) studentArea.classList.add('hidden');
-        app.renderClassroomRepertoire(); // Load Music List
+        app.renderClassroomRepertoire(); // Load Music List (Editable)
     } else {
+        // STUDENT / GUEST VIEW
         if (teacherArea) teacherArea.classList.add('hidden');
         if (studentArea) studentArea.classList.remove('hidden');
+
+        // Render Repertoire (Read-Only)
+        app.renderClassroomRepertoire();
+
+        // Guest Banner Logic
+        const banner = document.getElementById('guest-signup-banner');
+        if (currentUser.isGuest) {
+            if (!banner) {
+                // Inject Banner if missing
+                const bannerHTML = `
+                <div id="guest-signup-banner" class="bg-indigo-600 text-white p-4 rounded-xl shadow-lg mb-6 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                         <div class="bg-white/20 p-2 rounded-lg">
+                            <span class="material-icons-round">person_outline</span>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-sm">Você é um Visitante</h4>
+                            <p class="text-xs text-indigo-100">Crie uma conta para salvar suas músicas e playlists.</p>
+                        </div>
+                    </div>
+                    <button onclick="app.navigate('register')" class="bg-white text-indigo-600 px-4 py-2 rounded-lg text-xs font-bold hover:bg-indigo-50 transition-colors">
+                        Criar Conta
+                    </button>
+                </div>`;
+                studentArea.insertAdjacentHTML('afterbegin', bannerHTML);
+            }
+        } else {
+            // Remove banner if present (e.g. after login)
+            if (banner) banner.remove();
+        }
     }
 
     // 3. Render Participants (Mock)

@@ -131,9 +131,23 @@ window.app = {
                     app.loadClassroom(app.state.currentClassroomCode);
                 }
 
-            } else {
-                console.log('User logged out');
                 app.state.user = null;
+
+                // CHECK FOR GUEST SESSION (Offline/Mock)
+                const guestSession = localStorage.getItem('guest_session');
+                if (guestSession) {
+                    try {
+                        const guestUser = JSON.parse(guestSession);
+                        if (guestUser && guestUser.isGuest) {
+                            console.log('[CORE] Guest session restored:', guestUser.name);
+                            app.state.user = guestUser;
+                        }
+                    } catch (e) {
+                        console.error('[CORE] Failed to parse guest session', e);
+                        localStorage.removeItem('guest_session');
+                    }
+                }
+
                 app.updateHeader();
             }
         });
@@ -226,11 +240,18 @@ window.app = {
                 break;
 
             case 'classroom':
-                if (!app.state.user) {
-                    // Should have been caught by guard or explicit check?
-                    // If guest logic exists, handle it.
-                    // But for now, assuming guard checked it.
+                // FIX: Intercept Unauthenticated Access
+                if (!app.state.user && !app.state.user?.isGuest) {
+                    console.log('[NAVIGATE] Classroom access intercepted. User not logged in.');
+                    if (param) {
+                        app.showJoinClassroomModal(param);
+                    } else {
+                        // Edge case: No param? Go home.
+                        app.navigate('home', null, false);
+                    }
+                    return; // STOP EXECUTION (Do not load classroom view yet)
                 }
+
                 if (param) app.loadClassroom(param); // Defined in app_classroom.js
                 break;
 
