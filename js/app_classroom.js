@@ -477,13 +477,16 @@ app.joinAsGuest = async () => {
     // Use Auth Module
     await app.loginAsGuest(guestName);
 
+    // Capture ID before hiding modal (which clears the state)
+    const targetClassroom = app.state.pendingClassroomId;
+
     app.hideJoinClassroomModal();
 
     // Flag to bypass Navigate Guard
     app.state.justJoined = true;
 
-    if (app.state.pendingClassroomId) {
-        app.navigate('classroom', app.state.pendingClassroomId);
+    if (targetClassroom) {
+        app.navigate('classroom', targetClassroom);
     } else {
         app.navigate('home');
     }
