@@ -43,6 +43,21 @@ window.app = {
         // 0. UI Reference
         app.ui.app = document.getElementById('app');
 
+        // 0.1 Restore Guest Session IMMEDIATELLY (Synchronous)
+        // This ensures the router sees the user before Firebase initializes
+        const savedGuest = localStorage.getItem('guest_session');
+        if (savedGuest) {
+            try {
+                const guestUser = JSON.parse(savedGuest);
+                if (guestUser && guestUser.isGuest) {
+                    console.log('[CORE] Guest session restored (Sync):', guestUser.name);
+                    app.state.user = guestUser;
+                }
+            } catch (e) {
+                console.error('Guest restore error', e);
+            }
+        }
+
         // 1. Initialize Firebase (Compat)
         if (typeof firebase === 'undefined') {
             console.error("[CORE] Critical Error: Firebase SDK not loaded.");
@@ -126,12 +141,34 @@ window.app = {
                 // Fix: Reload dashboard if on school view (Race Condition Fix)
                 if (app.state.currentView === 'school') {
                     app.loadSchoolDashboard();
-                } else if (app.state.currentView === 'classroom' && app.state.currentClassroomCode) {
-                    console.log('Auth restored, reloading Classroom View...');
-                    app.loadClassroom(app.state.currentClassroomCode);
+                } else if (app.state.currentView === 'classroom') {
+                    // Check code either from state OR pending
+                    const code = app.state.currentClassroomCode || app.state.pendingClassroomId;
+                    if (code) {
+                        console.log('Auth restored, reloading Classroom View...');
+                        app.loadClassroom(code);
+                    }
                 }
 
-                app.state.user = null;
+                // CHECK FOR GUEST SESSION (Offline/Mock) - This block is now redundant here as guest is handled on logout or init
+                // const guestSession = localStorage.getItem('guest_session');
+                // if (guestSession) {
+                //     try {
+                //         const guestUser = JSON.parse(guestSession);
+                //         if (guestUser && guestUser.isGuest) {
+                //             console.log('[CORE] Guest session restored:', guestUser.name);
+                //             app.state.user = guestUser;
+                //         }
+                //     } catch (e) {
+                //         console.error('[CORE] Failed to parse guest session', e);
+                //         localStorage.removeItem('guest_session');
+                //     }
+                // }
+
+                app.updateHeader();
+            } else {
+                console.log('User logged out (Firebase)');
+                // Only clear state if NOT a guest (Double check storage to be sure we didn't just mistakenly clear it)
 
                 // CHECK FOR GUEST SESSION (Offline/Mock)
                 const guestSession = localStorage.getItem('guest_session');
@@ -139,13 +176,23 @@ window.app = {
                     try {
                         const guestUser = JSON.parse(guestSession);
                         if (guestUser && guestUser.isGuest) {
-                            console.log('[CORE] Guest session restored:', guestUser.name);
+                            console.log('[CORE] Guest session maintained/restored:', guestUser.name);
                             app.state.user = guestUser;
+
+                            // Retry Navigation if we were blocked
+                            if (app.state.pendingClassroomId) {
+                                console.log('[CORE] Retrying pending classroom:', app.state.pendingClassroomId);
+                                app.hideJoinClassroomModal();
+                                app.navigate('classroom', app.state.pendingClassroomId);
+                            }
+                        } else {
+                            app.state.user = null;
                         }
                     } catch (e) {
-                        console.error('[CORE] Failed to parse guest session', e);
-                        localStorage.removeItem('guest_session');
+                        app.state.user = null;
                     }
+                } else {
+                    app.state.user = null;
                 }
 
                 app.updateHeader();
@@ -219,6 +266,9 @@ window.app = {
             const clone = template.content.cloneNode(true);
             appContainer.appendChild(clone);
             console.log(`[NAVIGATE] Rendered template: view-${view}`);
+
+            // Update Header/Sidebar State AFTER render
+            app.updateHeader();
         } else {
             console.error(`[NAVIGATE] Template not found: view-${view}`);
             // Fallback?
@@ -302,8 +352,14 @@ window.app = {
             }
         });
 
-        // Show/Hide Admin Links
+        // Show/Hide Admin Links & Sidebar Access Control
         const adminLinks = document.querySelectorAll('[id^="admin-link-container"]');
+        const schoolLink = document.getElementById('sidebar-school-link');
+        const profileLink = document.getElementById('sidebar-profile-link');
+        const btnNewCifra = document.getElementById('btn-new-cifra');
+        const btnNewClassroom = document.getElementById('btn-new-classroom');
+
+        // 1. Admin Links
         adminLinks.forEach(el => {
             if (user && user.role === 'admin') {
                 el.classList.remove('hidden');
@@ -311,5 +367,25 @@ window.app = {
                 el.classList.add('hidden');
             }
         });
+
+        // 2. Guest Access Control (Restrict Full Access)
+        if (user && user.isGuest) {
+            if (schoolLink) schoolLink.classList.add('hidden');
+            if (profileLink) profileLink.classList.add('hidden');
+            if (btnNewCifra) btnNewCifra.classList.add('hidden');
+            if (btnNewClassroom) btnNewClassroom.classList.add('hidden');
+        } else {
+            if (schoolLink) schoolLink.classList.remove('hidden');
+            if (profileLink) profileLink.classList.remove('hidden');
+            if (btnNewCifra) btnNewCifra.classList.remove('hidden');
+            // btnNewClassroom logic is below (Student vs Teacher)
+        }
+
+        // 3. Student vs Teacher Control
+        if (user && user.role === 'student' && !user.isGuest) {
+            if (btnNewClassroom) btnNewClassroom.classList.add('hidden');
+        } else if (user && (user.role === 'teacher' || user.role === 'admin' || user.role === 'school')) {
+            if (btnNewClassroom) btnNewClassroom.classList.remove('hidden');
+        }
     }
 };
