@@ -33,14 +33,12 @@ app.loadSchoolDashboard = async () => {
     const user = app.state.user;
     if (!user) return;
 
-    // Fix: Defaults to false if no plan_id
-    const isSchool = user.plan_id === 5; // 5 = Escola Básico
-    // Or user.role === 'school'? Let's stick to plan_id for now as per original code
+    const isSchool = user.plan_id === 5 || user.role === 'admin' || user.role === 'school';
 
     const titleEl = document.getElementById('school-page-title');
     const roleLabel = document.getElementById('school-role-label');
-    const manageProfSection = document.getElementById('section-manage-professors');
 
+    // Update Header Text
     if (titleEl) {
         titleEl.innerHTML = isSchool
             ? '<span class="material-icons-round text-blue-500">domain</span> Gestão de Salas'
@@ -50,40 +48,9 @@ app.loadSchoolDashboard = async () => {
         roleLabel.innerText = isSchool ? 'Escola' : 'Professor';
     }
 
-    // Hide/Show Professor Management
-    if (manageProfSection) {
-        // IMPORTANT: In the new HTML, this ID only wraps the PROFESSORS list, not the whole page.
-        // So we can safely toggle it.
-        if (isSchool) {
-            manageProfSection.classList.remove('hidden');
-        } else {
-            manageProfSection.classList.add('hidden');
-        }
-    }
+    // 1. Fetch Classrooms & Calculate Metrics
+    await app.loadClassrooms();
 
-    // 1. Load Professors (Only if School)
-    if (isSchool) {
-        const list = document.getElementById('school-professors-list');
-        const empty = document.getElementById('school-empty-state');
-        if (list) {
-            list.innerHTML = '<tr><td colspan="5" class="text-center p-4">Carregando professores...</td></tr>';
-            // Mock or Fetch Logic here
-            setTimeout(() => {
-                list.innerHTML = ''; // Clear loading
-                if (empty) empty.classList.remove('hidden');
-            }, 500);
-        }
-    }
-
-    // 2. Load Classrooms
-    app.loadClassrooms();
-
-    // 3. Load Repertoire (Professor View only)
-    // If isSchool, maybe we don't show repertoire? Adjusted logic:
-    // Teachers need repertoire to send to students.
-    if (app.loadCifras) {
-        app.loadCifras('school-cifras-list');
-    }
 };
 
 app.loadClassrooms = async () => {
@@ -102,53 +69,151 @@ app.loadClassrooms = async () => {
             return;
         }
 
-        container.innerHTML = '<p class="text-center text-slate-400 py-8 col-span-full">Atualizando salas...</p>';
-
         // Fetch classrooms logic
-        const res = await fetch(`${app.API_URL}/classrooms`, {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        });
-
-        if (!res.ok) throw new Error('Falha ao buscar salas');
-        const classrooms = await res.json();
-
-        container.innerHTML = '';
-
-        if (classrooms.length === 0) {
-            container.innerHTML = `
-                <div class="col-span-full text-center p-12 text-slate-400 bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700">
-                    <span class="material-icons-round text-4xl mb-2 opacity-50">meeting_room</span>
-                    <p>Nenhuma sala criada ainda.</p>
-                </div>
-            `;
-            return;
+        let classrooms = [];
+        try {
+            const res = await fetch(`${app.API_URL}/classrooms`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            if (res.ok) classrooms = await res.json();
+            else throw new Error('API Error');
+        } catch (e) {
+            console.warn("[School] API unavailable, using Mock Data:", e);
+            app.ensureMockClassrooms();
+            classrooms = app.state.mockClassrooms || [];
+            // Simulate network delay for effect
+            await new Promise(r => setTimeout(r, 600));
         }
 
-        classrooms.forEach(c => {
-            const statusColor = c.status === 'active' ? 'text-green-500' : 'text-red-500';
-            const statusLabel = c.status === 'active' ? 'Ativa' : 'Encerrada';
+        // Store for Filtering
+        app.state.classroomsResults = classrooms;
 
-            const card = document.createElement('div');
-            card.className = 'bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 hover:shadow-md transition-all group relative';
-            card.innerHTML = `
-                <div class="flex justify-between items-start mb-4">
-                    <div>
-                        <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-1 group-hover:text-primary transition-colors">${c.name}</h3>
-                        <p class="text-xs font-mono bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded text-slate-500 inline-block">
-                            ${c.code}
-                        </p>
-                    </div>
-                    <span class="flex items-center gap-1 text-xs font-bold uppercase tracking-wider ${statusColor}">
-                        <span class="w-2 h-2 rounded-full bg-current"></span> ${statusLabel}
-                    </span>
+        // Render Dashboard
+        app.renderSchoolDashboard(classrooms);
+
+    } catch (e) {
+        console.error("Critical error loading classrooms:", e);
+        container.innerHTML = '<p class="text-center text-red-500 py-8">Erro crítico ao carregar dados.</p>';
+    }
+};
+
+app.renderSchoolDashboard = (classrooms) => {
+    // 1. Calculate Metrics
+    const activeRooms = classrooms.filter(c => c.status === 'active').length;
+    const totalStudents = classrooms.reduce((acc, c) => acc + (c.participantsCount || 0), 0);
+    // Mock random attendance between 70% and 95%
+    const avgAttendance = Math.floor(Math.random() * (98 - 75 + 1) + 75);
+
+    // Update Metrics DOM
+    const elActive = document.getElementById('metric-active-rooms');
+    const elStudents = document.getElementById('metric-total-students');
+    const elAttendance = document.getElementById('metric-attendance');
+    const elNextClass = document.getElementById('metric-next-class-title');
+    const elNextTime = document.getElementById('metric-next-class-time');
+
+    if (elActive) elActive.textContent = activeRooms;
+    if (elStudents) elStudents.textContent = totalStudents;
+    if (elAttendance) elAttendance.textContent = avgAttendance + '%';
+
+    // Mock Next Class
+    if (elNextClass) {
+        if (activeRooms > 0) {
+            const randomClass = classrooms.find(c => c.status === 'active') || classrooms[0];
+            elNextClass.textContent = randomClass.name;
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            elNextTime.textContent = `Amanhã, ${['14:00', '16:00', '19:00'][Math.floor(Math.random() * 3)]}`;
+        } else {
+            elNextClass.textContent = 'Nenhuma aula agendada';
+            elNextTime.textContent = '--';
+        }
+    }
+
+    // 2. Render Grid
+    app.renderClassroomGrid(classrooms);
+};
+
+app.renderClassroomGrid = (classrooms) => {
+    const container = document.getElementById('school-classrooms-list');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    if (classrooms.length === 0) {
+        container.innerHTML = `
+            <div class="col-span-full text-center p-12 text-slate-400 bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700">
+                <span class="material-icons-round text-4xl mb-2 opacity-50">meeting_room</span>
+                <p>Nenhuma sala encontrada.</p>
+            </div>
+        `;
+        return;
+    }
+
+    classrooms.forEach(c => {
+        const isActive = c.status === 'active';
+        const statusColor = isActive ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400';
+        const statusLabel = isActive ? 'Ativa' : 'Arquivada';
+
+        // Mock Level and Progress
+        const level = ['Iniciante', 'Intermediário', 'Avançado'][Math.floor(Math.random() * 3)];
+        const levelColor = level === 'Iniciante' ? 'text-blue-500' : (level === 'Intermediário' ? 'text-orange-500' : 'text-purple-500');
+        const progress = Math.floor(Math.random() * 100);
+
+        const card = document.createElement('div');
+        card.className = 'bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-lg transition-all group flex flex-col h-full relative overflow-hidden';
+
+        // Decorative top border
+        const borderColor = isActive ? 'bg-emerald-500' : 'bg-slate-300';
+
+        card.innerHTML = `
+            <div class="h-1 w-full ${borderColor} absolute top-0 left-0 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            
+            <div class="flex justify-between items-start mb-4">
+                <span class="px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider ${statusColor}">
+                    ${statusLabel}
+                </span>
+                <div class="relative">
+                    <button class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                        <span class="material-icons-round">more_vert</span>
+                    </button>
                 </div>
-                
-                <div class="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400 mb-6">
-                    <span class="flex items-center gap-1"><span class="material-icons-round text-base">person</span> ${c.participantsCount || 0}</span>
+            </div>
+
+            <h3 class="font-bold text-xl text-slate-800 dark:text-white mb-1 group-hover:text-primary transition-colors line-clamp-1" title="${c.name}">
+                ${c.name}
+            </h3>
+            
+            <div class="flex items-center gap-2 mb-6">
+                <div class="flex items-center gap-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700/50 px-2 py-1 rounded-md">
+                    <span class="material-icons-round text-sm opacity-50">tag</span> ${c.code}
                 </div>
+                 <div class="flex items-center gap-1.5 text-xs font-bold ${levelColor} bg-slate-50 dark:bg-slate-700/50 px-2 py-1 rounded-md">
+                    <span class="material-icons-round text-sm opacity-50">signal_cellular_alt</span> ${level}
+                </div>
+            </div>
+
+            <!-- Metrics Row -->
+            <div class="grid grid-cols-2 gap-4 mb-6 pt-4 border-t border-slate-50 dark:border-slate-700/50">
+                <div>
+                   <p class="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Alunos</p>
+                   <div class="flex items-center gap-2">
+                        <span class="material-icons-round text-slate-400 text-sm">groups</span>
+                        <span class="font-bold text-slate-700 dark:text-slate-200">${c.participantsCount || 0}</span>
+                   </div>
+                </div>
+                <div>
+                   <p class="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Progresso</p>
+                   <div class="flex items-center gap-2">
+                        <div class="flex-1 h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                            <div class="h-full bg-primary rounded-full" style="width: ${progress}%"></div>
+                        </div>
+                        <span class="text-xs font-bold text-primary">${progress}%</span>
+                   </div>
+                </div>
+            </div>
 
                 <div class="flex gap-2">
-                    <button onclick="app.navigate('classroom', '${c.code}')" 
+                    <button onclick="app.openClassroomManagement('${c.code}')" 
                         class="flex-1 bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-white py-2 rounded-xl font-bold transition-colors">
                         Gerenciar
                     </button>
@@ -165,87 +230,21 @@ app.loadClassrooms = async () => {
                     </button>
                     ` : ''}
                 </div>
-             `;
-            container.appendChild(card);
-        });
-
-    } catch (e) {
-        console.warn("[School] API unavailable, using Mock Data:", e);
-
-        // --- MOCK FALLBACK ---
-
-        // Ensure Mock Data
-        app.ensureMockClassrooms();
-
-        const mockClassrooms = app.state.mockClassrooms;
-
-        // Simulate network delay
-        await new Promise(r => setTimeout(r, 500));
-
-        container.innerHTML = '';
-        if (mockClassrooms.length === 0) {
-            container.innerHTML = `
-                <div class="col-span-full text-center p-12 text-slate-400 bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700">
-                    <span class="material-icons-round text-4xl mb-2 opacity-50">meeting_room</span>
-                    <p>Nenhuma sala criada ainda.</p>
-                </div>
-            `;
-            return;
-        }
-
-        mockClassrooms.forEach(c => {
-            const statusColor = c.status === 'active' ? 'text-green-500' : 'text-red-500';
-            const statusLabel = c.status === 'active' ? 'Ativa' : 'Encerrada';
-
-            const card = document.createElement('div');
-            card.className = 'bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 hover:shadow-md transition-all group relative';
-            card.innerHTML = `
-                <div class="flex justify-between items-start mb-4">
-                    <div>
-                        <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-1 group-hover:text-primary transition-colors">${c.name}</h3>
-                        <p class="text-xs font-mono bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded text-slate-500 inline-block">
-                            ${c.code}
-                        </p>
-                    </div>
-                    <span class="flex items-center gap-1 text-xs font-bold uppercase tracking-wider ${statusColor}">
-                        <span class="w-2 h-2 rounded-full bg-current"></span> ${statusLabel}
-                    </span>
-                </div>
-                
-                <div class="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400 mb-6">
-                    <span class="flex items-center gap-1"><span class="material-icons-round text-base">person</span> ${c.participantsCount || 0}</span>
-                </div>
-
-                <div class="flex gap-2">
-                    <button onclick="app.navigate('classroom', '${c.code}')" 
-                        class="flex-1 bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-white py-2 rounded-xl font-bold transition-colors">
-                        Gerenciar
-                    </button>
-                    
-                    <button onclick="app.copyClassroomLink('${c.code}')" 
-                        class="flex-1 border border-purple-100 dark:border-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 py-2 rounded-xl font-bold transition-colors flex items-center justify-center gap-2">
-                        <span class="material-icons-round text-sm">link</span>
-                    </button>
-
-                    ${c.status === 'active' ? `
-                    <button onclick="app.closeClassroom('${c.code}')" title="Encerrar Sala"
-                        class="px-3 py-2 bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-xl transition-colors">
-                        <span class="material-icons-round">block</span>
-                    </button>
-                    ` : `
-                    <button onclick="app.deleteClassroom('${c.code}')" title="Excluir Sala"
-                        class="px-3 py-2 bg-slate-100 dark:bg-slate-700 text-slate-500 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20 dark:hover:text-red-400 rounded-xl transition-colors">
-                        <span class="material-icons-round">delete</span>
-                    </button>
-                    `}
-                </div>
-             `;
-            container.appendChild(card);
-        });
-
-        app.showToast('Modo Offline: Dados simulados carregados.', 'warning');
-    }
+        `;
+        container.appendChild(card);
+    });
 };
+
+app.filterClassrooms = (query) => {
+    if (!app.state.classroomsResults) return;
+    const term = query.toLowerCase();
+    const filtered = app.state.classroomsResults.filter(c =>
+        c.name.toLowerCase().includes(term) ||
+        c.code.toLowerCase().includes(term)
+    );
+    app.renderClassroomGrid(filtered);
+};    // Simulate network delay
+
 
 // --- MODAL & CREATE LOGIC ---
 
@@ -490,6 +489,207 @@ app.joinAsGuest = async () => {
     } else {
         app.navigate('home');
     }
+};
+
+// --- CLASSROOM MANAGEMENT VIEW (New) ---
+
+app.openClassroomManagement = (classroomId) => {
+    console.log("Opening Management View for:", classroomId);
+    app.state.currentManagementClassroom = classroomId;
+
+    // 1. Toggle Views
+    const dashboardModels = [
+        document.getElementById('school-dashboard-metrics'), // Assuming separate container if exists, or just main
+        document.getElementById('school-control-bar'),
+        document.getElementById('school-classrooms-list')
+    ];
+
+    // Hide Dashboard
+    // Note: Since metrics/controls are direct children of main in view-school, we need to handle them.
+    // Ideally, wrap dashboard in a div. For now, logic:
+    // We will look for a main dashboard container. If not found, we hide known elements.
+    // Based on HTML structure, the metrics and control bar are direct children.
+    // Let's create a helper to toggle.
+
+    // Better Approach: Re-query elements or assume wrapper.
+    // In index.html, I should arguably have wrapped the dashboard content. 
+    // BUT since I didn't wrap them in a previous step, I will grab them by ID or class.
+
+    // Let's assume (based on my previous view) that I need to hide specific dashboard elements.
+    // Or I can add a specific class to the Dashboard elements?
+    // Let's rely on finding them.
+
+    const mgmtSection = document.getElementById('section-classroom-management');
+    if (mgmtSection) mgmtSection.classList.remove('hidden');
+
+    // Hide Dashboard specific IDs found in view-school template
+    const metrics = document.querySelector('#view-school main > .grid'); // The 4 cards
+    const controlBar = document.querySelector('#view-school main > .flex.justify-between');
+    const list = document.getElementById('school-classrooms-list');
+
+    if (metrics) metrics.classList.add('hidden');
+    if (controlBar) controlBar.classList.add('hidden');
+    if (list) list.classList.add('hidden');
+
+
+    // 2. Set Title
+    const classroom = app.state.mockClassrooms.find(c => c.code === classroomId) || { name: 'Sala Desconhecida', code: classroomId };
+    const titleEl = document.getElementById('classroom-mgmt-title');
+    const subEl = document.getElementById('classroom-mgmt-subtitle');
+
+    if (titleEl) titleEl.textContent = classroom.name;
+    if (subEl) subEl.textContent = `Código: ${classroom.code} • ${classroom.plan || 'Básico'}`;
+
+    // 3. Render Tabs
+    app.renderClassroomTabs('overview');
+};
+
+app.renderClassroomTabs = (activeTab = 'overview') => {
+    const tabsContainer = document.getElementById('classroom-mgmt-tabs');
+    const contentContainer = document.getElementById('classroom-mgmt-content');
+
+    if (!tabsContainer || !contentContainer) return;
+
+    const tabs = [
+        { id: 'overview', label: 'Visão Geral', icon: 'dashboard' },
+        { id: 'students', label: 'Alunos', icon: 'groups' },
+        { id: 'content', label: 'Conteúdo', icon: 'library_music' },
+        { id: 'settings', label: 'Configurações', icon: 'settings' }
+    ];
+
+    // Render Tab Headers
+    tabsContainer.innerHTML = tabs.map(tab => {
+        const isActive = tab.id === activeTab;
+        const bg = isActive ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300';
+        return `
+            <button onclick="app.renderClassroomTabs('${tab.id}')" 
+                class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${bg}">
+                <span class="material-icons-round text-lg">${tab.icon}</span>
+                ${tab.label}
+            </button>
+        `;
+    }).join('');
+
+    // Render Content
+    app.renderClassroomTabContent(activeTab, contentContainer);
+};
+
+app.renderClassroomTabContent = (tabId, container) => {
+    container.innerHTML = '<div class="flex justify-center p-8"><span class="animate-spin material-icons-round text-slate-400">sync</span></div>';
+
+    const classroom = app.state.mockClassrooms.find(c => c.code === app.state.currentManagementClassroom);
+    if (!classroom) return;
+
+    setTimeout(() => {
+        switch (tabId) {
+            case 'overview':
+                container.innerHTML = `
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700">
+                            <h4 class="text-slate-500 font-bold text-xs uppercase mb-2">Engajamento</h4>
+                            <p class="text-3xl font-bold text-slate-800 dark:text-white">95%</p>
+                            <span class="text-xs text-emerald-500 font-bold">+5% essa semana</span>
+                        </div>
+                        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700">
+                            <h4 class="text-slate-500 font-bold text-xs uppercase mb-2">Alunos Ativos</h4>
+                            <p class="text-3xl font-bold text-slate-800 dark:text-white">${classroom.participantsCount || 0}</p>
+                        </div>
+                        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700">
+                            <h4 class="text-slate-500 font-bold text-xs uppercase mb-2">Conteúdos</h4>
+                            <p class="text-3xl font-bold text-slate-800 dark:text-white">12</p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex gap-4">
+                        <button onclick="app.navigate('classroom', '${classroom.code}')" 
+                            class="flex-1 bg-primary hover:bg-primary-dark text-white py-4 rounded-xl font-bold shadow-lg shadow-primary/20 flex items-center justify-center gap-3 transition-all active:scale-95">
+                            <span class="material-icons-round text-2xl">podcasts</span>
+                            Iniciar Aula Ao Vivo
+                        </button>
+                         <button 
+                            class="flex-1 bg-white dark:bg-slate-800 hover:bg-slate-50 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-white py-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-all">
+                            <span class="material-icons-round text-2xl">share</span>
+                            Convidar Alunos
+                        </button>
+                    </div>
+                `;
+                break;
+            case 'students':
+                const students = [
+                    { name: 'João Silva', status: 'online', instrument: 'Violão' },
+                    { name: 'Maria Souza', status: 'offline', instrument: 'Vocal' },
+                    { name: 'Pedro Santos', status: 'offline', instrument: 'Guitarra' },
+                ]; // Mock
+
+                container.innerHTML = `
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                        <table class="w-full text-left text-sm text-slate-600 dark:text-slate-400">
+                            <thead class="bg-slate-50 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700">
+                                <tr>
+                                    <th class="px-6 py-4 font-bold">Aluno</th>
+                                    <th class="px-6 py-4 font-bold">Instrumento</th>
+                                    <th class="px-6 py-4 font-bold">Status</th>
+                                    <th class="px-6 py-4 font-bold text-right">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                                ${students.map(s => `
+                                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                                        <td class="px-6 py-4 font-bold text-slate-800 dark:text-white">${s.name}</td>
+                                        <td class="px-6 py-4">${s.instrument}</td>
+                                        <td class="px-6 py-4">
+                                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${s.status === 'online' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}">
+                                                <span class="w-1.5 h-1.5 rounded-full ${s.status === 'online' ? 'bg-emerald-500' : 'bg-slate-400'}"></span>
+                                                ${s.status === 'online' ? 'Online' : 'Offline'}
+                                            </span>
+                                        </td>
+                                        <td class="px-6 py-4 text-right">
+                                            <button class="text-slate-400 hover:text-red-500 transition-colors"><span class="material-icons-round">delete</span></button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                break;
+            case 'content':
+                container.innerHTML = `
+                    <div class="text-center py-12 bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700">
+                        <span class="material-icons-round text-4xl text-slate-300 mb-4">library_music</span>
+                        <p class="text-slate-500 font-medium">Nenhuma setlist criada.</p>
+                        <button class="mt-4 text-primary font-bold hover:underline">Criar Setlist</button>
+                    </div>
+                `;
+                break;
+            case 'settings':
+                container.innerHTML = `
+                     <div class="max-w-2xl mx-auto space-y-6">
+                        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700">
+                            <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-4">Dados da Sala</h3>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-bold text-slate-500 mb-1">Nome</label>
+                                    <input type="text" value="${classroom.name}" class="w-full px-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-bold text-slate-800 dark:text-white">
+                                </div>
+                            </div>
+                            <div class="mt-6 flex justify-end">
+                                <button class="bg-emerald-500 text-white px-6 py-2 rounded-xl font-bold hover:bg-emerald-600 transition-colors">Salvar Alterações</button>
+                            </div>
+                        </div>
+
+                        <div class="bg-red-50 dark:bg-red-900/10 p-6 rounded-2xl border border-red-100 dark:border-red-900/30">
+                            <h3 class="font-bold text-lg text-red-600 dark:text-red-400 mb-2">Zona de Perigo</h3>
+                            <p class="text-sm text-red-500/80 mb-6">Ações irreversíveis.</p>
+                            <button class="bg-white dark:bg-slate-800 text-red-500 border border-red-200 dark:border-red-900/50 px-6 py-2 rounded-xl font-bold hover:bg-red-50 transition-colors">
+                                Excluir Sala Definitivamente
+                            </button>
+                        </div>
+                     </div>
+                `;
+                break;
+        }
+    }, 300); // Simulate load
 };
 
 app.copyClassroomLink = (id) => {

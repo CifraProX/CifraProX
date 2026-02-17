@@ -2,9 +2,33 @@
 <html lang="pt-br" class="light">
 
 <head>
+    <script>
+        window.onerror = function (msg, url, lineNo, columnNo, error) {
+            var container = document.createElement('div');
+            container.style.cssText = 'position:fixed;top:0;left:0;width:100%;background:red;color:white;padding:20px;z-index:99999;font-family:monospace;white-space:pre-wrap;';
+            container.innerText = 'ERROR: ' + msg + '\nURL: ' + url + '\nLine: ' + lineNo + '\nCol: ' + columnNo + '\nStack: ' + (error ? error.stack : 'N/A');
+            document.body.appendChild(container);
+            return false;
+        };
+        window.addEventListener('unhandledrejection', function (event) {
+            var container = document.createElement('div');
+            container.style.cssText = 'position:fixed;top:50px;left:0;width:100%;background:darkred;color:white;padding:20px;z-index:99999;font-family:monospace;white-space:pre-wrap;';
+            container.innerText = 'PROMISE ERROR: ' + event.reason;
+            document.body.appendChild(container);
+        });
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CifraProX</title>
+
+    <!-- Firebase SDK (Compat) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" crossorigin="anonymous"
+        onerror="console.error('FAILED TO LOAD FIREBASE APP')"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" crossorigin="anonymous"
+        onerror="console.error('FAILED TO LOAD FIREBASE AUTH')"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js" crossorigin="anonymous"
+        onerror="console.error('FAILED TO LOAD FIREBASE FIRESTORE')"></script>
+
 
     <!-- Meta tags PWA -->
     <meta name="theme-color" content="#10b981">
@@ -1416,147 +1440,138 @@
                     </div>
                 </header>
 
-                <main class="flex-1 p-6 sm:p-8 overflow-y-auto">
-                    <!-- CONTENT -->
-                    <main class="flex-1 p-6 sm:p-8 overflow-y-auto">
-                        <!-- CONTENT -->
-                        <div class="space-y-8">
-
-                            <!-- School Specific Section (Professors) - Hidden for normal professors -->
-                            <div id="section-manage-professors" class="hidden">
-                                <h2 class="text-2xl font-bold text-slate-800 dark:text-white mb-4">Professores</h2>
-                                <div
-                                    class="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-                                    <table class="w-full text-left text-sm text-slate-600 dark:text-slate-400">
-                                        <tbody id="school-professors-list"></tbody>
-                                    </table>
-                                    <div id="school-empty-state" class="p-8 text-center hidden">
-                                        <p>Nenhum professor vinculado.</p>
-                                    </div>
-                                </div>
+                <main class="flex-1 p-6 sm:p-8 overflow-y-auto bg-slate-50 dark:bg-slate-900">
+                    <!-- DASHBOARD METRICS -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                        <!-- Card 1: Active Rooms -->
+                        <div
+                            class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden group">
+                            <div
+                                class="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                                <span class="material-icons-round text-5xl text-blue-500">meeting_room</span>
                             </div>
-
-                            <!-- Classrooms Section -->
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <h2 class="text-2xl font-bold text-slate-800 dark:text-white">Salas de Aula</h2>
-                                    <p class="text-slate-500">Gerencie suas turmas e alunos.</p>
-                                </div>
-                                <button onclick="app.showCreateClassroomModal()" id="btn-new-classroom"
-                                    class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-purple-500/20 flex items-center gap-2 transition-all active:scale-95">
-                                    <span class="material-icons-round">add_business</span> Nova Sala
-                                </button>
-                            </div>
-
-                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-                                id="school-classrooms-list">
-                                <!-- Classrooms injected here -->
-                                <div
-                                    class="col-span-full text-center p-12 text-slate-400 bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700">
-                                    <span class="material-icons-round text-4xl mb-2 opacity-50">meeting_room</span>
-                                    <p>Nenhuma sala criada ainda.</p>
-                                </div>
-                            </div>
-
-                            <!-- Repertoire Section -->
-                            <div class="mt-12 pt-8 border-t border-slate-100 dark:border-slate-800">
-                                <div class="flex items-center justify-between mb-6">
-                                    <div>
-                                        <h2 class="text-2xl font-bold text-slate-800 dark:text-white">Meu Repertório
-                                        </h2>
-                                        <p class="text-slate-500 mb-4">Suas cifras e músicas (Visão Geral).</p>
-                                    </div>
-                                </div>
-
-                                <!-- Search -->
-                                <div class="relative max-w-2xl w-full mb-8">
-                                    <span
-                                        class="absolute left-4 top-3.5 text-slate-400 material-icons-round">search</span>
-                                    <input type="text" placeholder="Buscar no seu repertório..."
-                                        oninput="app.filterCifras(this.value, 'school-cifras-list')"
-                                        class="w-full pl-12 pr-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all shadow-sm">
-                                </div>
-
-                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
-                                    id="school-cifras-list">
-                                    <div class="col-span-full text-center py-12 text-slate-400">
-                                        <span class="material-icons-round text-4xl mb-2 opacity-50">library_music</span>
-                                        <p>Carregando repertório...</p>
-                                    </div>
-                                </div>
-                            </div>
+                            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Salas Ativas</p>
+                            <h3 class="text-3xl font-bold text-slate-800 dark:text-white" id="metric-active-rooms">-
+                            </h3>
+                            <p class="text-xs font-medium text-emerald-500 mt-2 flex items-center gap-1">
+                                <span class="material-icons-round text-sm">trending_up</span> +2 nesta semana
+                            </p>
                         </div>
 
-                        <!-- Live Manager Section (Hidden by default) -->
-                        <div id="section-live-manager" class="hidden">
-                            <!-- Header -->
-                            <div class="flex items-center gap-4 mb-8">
-                                <button onclick="app.closeClassroomManager()"
+                        <!-- Card 2: Total Students -->
+                        <div
+                            class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden group">
+                            <div
+                                class="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                                <span class="material-icons-round text-5xl text-purple-500">groups</span>
+                            </div>
+                            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Alunos</p>
+                            <h3 class="text-3xl font-bold text-slate-800 dark:text-white" id="metric-total-students">-
+                            </h3>
+                            <p class="text-xs font-medium text-purple-500 mt-2 flex items-center gap-1">
+                                <span class="material-icons-round text-sm">new_releases</span> 5 novos alunos
+                            </p>
+                        </div>
+
+                        <!-- Card 3: Attendance -->
+                        <div
+                            class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden group">
+                            <div
+                                class="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                                <span class="material-icons-round text-5xl text-emerald-500">check_circle</span>
+                            </div>
+                            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Presença Média</p>
+                            <h3 class="text-3xl font-bold text-slate-800 dark:text-white" id="metric-attendance">-%</h3>
+                            <p class="text-xs font-medium text-slate-400 mt-2">Últimos 30 dias</p>
+                        </div>
+
+                        <!-- Card 4: Next Class -->
+                        <div
+                            class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden group">
+                            <div
+                                class="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                                <span class="material-icons-round text-5xl text-orange-500">event</span>
+                            </div>
+                            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Próxima Aula</p>
+                            <h3 class="text-lg font-bold text-slate-800 dark:text-white truncate"
+                                id="metric-next-class-title">---</h3>
+                            <p class="text-xs font-medium text-orange-500 mt-1" id="metric-next-class-time">--:--</p>
+                        </div>
+                    </div>
+
+                    <!-- CONTROL BAR -->
+                    <div class="flex flex-col lg:flex-row gap-4 items-center justify-between mb-6">
+                        <h2 class="text-xl font-bold text-slate-800 dark:text-white whitespace-nowrap">Minhas Salas</h2>
+
+                        <div class="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+                            <!-- Search -->
+                            <div class="relative flex-1 sm:w-64">
+                                <span
+                                    class="absolute left-3 top-2.5 text-slate-400 material-icons-round text-sm">search</span>
+                                <input type="text" placeholder="Buscar turma..."
+                                    oninput="app.filterClassrooms(this.value)"
+                                    class="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary outline-none">
+                            </div>
+
+                            <!-- Filter Toggle (Visual only for now, logic can expand) -->
+                            <button
+                                class="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-600 dark:text-slate-300 text-sm font-bold flex items-center justify-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                <span class="material-icons-round text-sm">filter_list</span> Filtros
+                            </button>
+
+                            <!-- New Room Button -->
+                            <button onclick="app.showCreateClassroomModal()" id="btn-new-classroom"
+                                class="bg-primary hover:bg-primary-dark text-white px-5 py-2 rounded-xl text-sm font-bold shadow-lg shadow-primary/20 flex items-center justify-center gap-2 transition-all active:scale-95 whitespace-nowrap">
+                                <span class="material-icons-round text-sm">add</span> Nova Sala
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- CLASSROOMS GRID -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6" id="school-classrooms-list">
+                        <!-- Cards injected via JS -->
+                        <div class="col-span-full text-center py-12 text-slate-400">
+                            <span class="material-icons-round text-4xl mb-2 opacity-50 animate-bounce">refresh</span>
+                            <p>Carregando dashboard...</p>
+                        </div>
+                    </div>
+
+                    <div id="section-classroom-management" class="hidden">
+                        <!-- Header -->
+                        <div class="flex flex-col md:flex-row items-center justify-between gap-4 mb-8">
+                            <div class="flex items-center gap-4 w-full md:w-auto">
+                                <button onclick="app.navigate('school')"
                                     class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-colors">
                                     <span
                                         class="material-icons-round text-slate-500 dark:text-slate-400">arrow_back</span>
                                 </button>
                                 <div>
                                     <h2 class="text-2xl font-bold text-slate-800 dark:text-white"
-                                        id="live-manager-title">
+                                        id="classroom-mgmt-title">
                                         Gerenciar Sala
                                     </h2>
-                                    <p class="text-slate-500" id="live-manager-subtitle">Selecione uma cifra para enviar
-                                        aos
-                                        alunos.</p>
+                                    <p class="text-slate-500" id="classroom-mgmt-subtitle">Carregando...</p>
                                 </div>
                             </div>
 
-                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 h-[calc(100vh-200px)]">
-                                <!-- LEFT: Repertoire -->
-                                <div
-                                    class="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden shadow-sm">
-                                    <div class="p-6 border-b border-slate-100 dark:border-slate-700">
-                                        <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-4">Meu Repertório
-                                        </h3>
-                                        <div class="relative">
-                                            <span
-                                                class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 material-icons-round">search</span>
-                                            <input type="text" placeholder="Buscar no seu repertório..."
-                                                oninput="app.filterCifras(this.value, 'live-manager-cifras-list')"
-                                                class="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all">
-                                        </div>
-                                    </div>
-                                    <div class="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-900/50">
-                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4"
-                                            id="live-manager-cifras-list">
-                                            <p class="text-center text-slate-400 py-10">Carregando cifras...</p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- RIGHT: Connected Students -->
-                                <div
-                                    class="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden shadow-sm">
-                                    <div
-                                        class="p-6 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
-                                        <h3 class="font-bold text-lg text-slate-800 dark:text-white">Alunos Conectados
-                                        </h3>
-                                        <span
-                                            class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1">
-                                            <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Ao
-                                            Vivo
-                                        </span>
-                                    </div>
-                                    <div class="flex-1 overflow-y-auto p-6 relative">
-                                        <div id="live-students-list" class="space-y-4">
-                                            <div
-                                                class="flex flex-col items-center justify-center h-full text-slate-400">
-                                                <span
-                                                    class="material-icons-round text-4xl mb-2 opacity-30">people</span>
-                                                <p>Aguardando alunos entrarem...</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                            <!-- Tabs -->
+                            <div id="classroom-mgmt-tabs"
+                                class="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl overflow-x-auto max-w-full no-scrollbar">
+                                <!-- Injected via JS -->
                             </div>
                         </div>
-                    </main>
+
+                        <!-- Content Area -->
+                        <div id="classroom-mgmt-content"
+                            class="animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-[400px]">
+                            <!-- Injected via JS -->
+                            <div class="flex flex-col items-center justify-center py-12 text-slate-400">
+                                <span class="material-icons-round text-4xl mb-4 animate-spin">sync</span>
+                                <p>Carregando dados da sala...</p>
+                            </div>
+                        </div>
+                    </div>
+                </main>
             </div>
         </div>
     </template>
@@ -1636,93 +1651,27 @@
                     </div>
                 </header>
 
-                <main class="flex-1 max-w-4xl mx-auto w-full p-6 md:p-10">
-                    <div
-                        class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden">
-                        <!-- Header Cover -->
-                        <div class="h-32 bg-gradient-to-r from-emerald-500 to-teal-600 relative">
-                            <div class="absolute -bottom-12 left-8 md:left-12">
-                                <div class="h-24 w-24 rounded-full bg-white dark:bg-slate-900 p-1.5 shadow-lg">
-                                    <div class="h-full w-full rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-3xl font-bold text-slate-500 dark:text-slate-400"
-                                        id="profile-avatar">
-                                        --
-                                    </div>
-                                </div>
-                            </div>
+                <main class="flex-1 max-w-5xl mx-auto w-full p-6 md:p-8" id="profile-content-area">
+                    <!-- Header -->
+                    <div class="flex flex-col md:flex-row items-center justify-between gap-4 mb-8">
+                        <div>
+                            <h2 class="text-3xl font-bold text-slate-800 dark:text-white">Minha Conta</h2>
+                            <p class="text-slate-500 dark:text-slate-400">Gerencie suas informações e assinatura.</p>
                         </div>
+                        <!-- Tabs Container -->
+                        <div id="profile-tabs"
+                            class="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl overflow-x-auto max-w-full no-scrollbar">
+                            <!-- Injected via JS -->
+                        </div>
+                    </div>
 
-                        <div class="pt-16 pb-8 px-8 md:px-12">
-                            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                                <div>
-                                    <h2 class="text-3xl font-bold text-slate-800 dark:text-white" id="profile-name">
-                                        Carregando...</h2>
-                                    <p class="text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-1">
-                                        <span class="material-icons-round text-base">email</span>
-                                        <span id="profile-email">...</span>
-                                    </p>
-                                </div>
-                                <div class="flex gap-3">
-                                    <span
-                                        class="px-4 py-1.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 rounded-full text-sm font-bold uppercase tracking-wider"
-                                        id="profile-role">
-                                        ...
-                                    </span>
-                                </div>
-                            </div>
-
-                            <hr class="my-8 border-slate-100 dark:border-slate-700">
-
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                <!-- Info Box -->
-                                <div class="space-y-6">
-                                    <h3
-                                        class="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                                        <span class="material-icons-round text-slate-400">info</span> Informações
-                                    </h3>
-                                    <div class="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-6 space-y-4">
-                                        <div>
-                                            <p class="text-xs font-bold text-slate-400 uppercase">Plano Atual</p>
-                                            <p class="font-medium text-slate-700 dark:text-slate-300" id="profile-plan">
-                                                ...
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <p class="text-xs font-bold text-slate-400 uppercase">Membro Desde</p>
-                                            <p class="font-medium text-slate-700 dark:text-slate-300"
-                                                id="profile-since">...
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <p class="text-xs font-bold text-slate-400 uppercase">UID</p>
-                                            <p class="font-mono text-xs text-slate-500 truncate" id="profile-uid">...
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Settings Box -->
-                                <div class="space-y-6">
-                                    <h3
-                                        class="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                                        <span class="material-icons-round">settings</span> Configurações
-                                    </h3>
-                                    <div class="space-y-3">
-                                        <button onclick="app.changePassword()"
-                                            class="w-full text-left p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-white font-bold transition-colors flex items-center justify-between group">
-                                            <span>Alterar Senha</span>
-                                            <span
-                                                class="material-icons-round text-slate-400 group-hover:text-primary transition-colors">lock_reset</span>
-                                        </button>
-
-                                        <button onclick="app.logout()"
-                                            class="w-full text-left p-4 rounded-xl border border-red-100 dark:border-red-900/30 bg-red-50 dark:bg-red-900/10 hover:bg-red-100 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 font-bold transition-colors flex items-center justify-between group">
-                                            <span>Sair da Conta</span>
-                                            <span
-                                                class="material-icons-round text-red-300 group-hover:text-red-500 transition-colors">logout</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
+                    <!-- Content Area -->
+                    <div id="profile-tab-content"
+                        class="animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-[400px]">
+                        <!-- Injected via JS -->
+                        <div class="flex flex-col items-center justify-center py-12 text-slate-400">
+                            <span class="material-icons-round text-4xl mb-4 animate-spin">sync</span>
+                            <p>Carregando perfil...</p>
                         </div>
                     </div>
                 </main>
@@ -1813,6 +1762,7 @@
     <script src="js/app_classroom.js"></script>
     <script src="js/app_cifras.js"></script>
     <script src="js/app_admin.js"></script>
+    <script src="js/app_profile.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', app.init);
     </script>
@@ -1949,6 +1899,26 @@
     </div>
 
     <!-- Duplicatas removidas -->
+    <!-- Scripts -->
+    <!-- Scripts -->
+    <script src="js/app_core.js"></script>
+    <script src="js/app_utils.js"></script>
+    <script src="js/app_auth.js"></script>
+    <script src="js/app_classroom.js"></script>
+    <script src="js/app_profile.js"></script>
+    <script src="js/app_cifras.js"></script>
+    <script src="js/app_editor.js"></script>
+    <script src="js/app_admin.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            if (window.app && app.init) {
+                app.init();
+            } else {
+                console.error("App not initialized. Check Reference.");
+            }
+        });
+    </script>
 </body>
 
 </html>

@@ -330,19 +330,11 @@ window.app = {
                 break;
 
             case 'profile':
-                if (app.role === 'admin') {
-                    // ...
-                }
-                // Fill profile data
-                if (app.state.user) {
-                    setTimeout(() => { // Small delay to ensure DOM
-                        document.getElementById('profile-name').textContent = app.state.user.name;
-                        document.getElementById('profile-email').textContent = app.state.user.email;
-                        document.getElementById('profile-role').textContent = app.state.user.role === 'admin' ? 'Administrador' : (app.state.user.role === 'school' ? 'Professor' : 'Membro');
-                        document.getElementById('profile-uid').textContent = app.state.user.uid;
-                        document.getElementById('profile-avatar').textContent = app.state.user.name.charAt(0).toUpperCase();
-                        // Dates would need formatting
-                    }, 50);
+                if (app.loadProfile) {
+                    // Small delay to ensure DOM is ready and modules loaded
+                    setTimeout(() => app.loadProfile(), 50);
+                } else {
+                    console.warn("Profile module not loaded");
                 }
                 break;
         }
