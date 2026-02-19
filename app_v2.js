@@ -345,21 +345,30 @@ function initializeApp() {
             if (view === 'classroom') {
                 console.log('[NAVIGATE] Classroom view detected! Param:', param, 'User:', app.state.user);
 
-                // DATA: Force Join Modal for Guests (so they can optionally Login)
-                // Exception: If they just completed the Join flow (justJoined flag)
+                // ✅ VERIFICAÇÃO ANTECIPADA - Antes de renderizar qualquer coisa
                 const isGuest = app.state.user && app.state.user.role === 'guest';
                 const justJoined = app.state.justJoined;
                 app.state.justJoined = false; // Reset flag
 
                 if ((!app.state.user || isGuest) && !justJoined) {
-                    // Guest trying to access - show join modal
+                    // Guest trying to access - show join modal IMMEDIATELY
                     console.log('[NAVIGATE] User is guest/null, showing join modal...');
-                    // Clear main content to avoid ghosting
+
+                    // ✅ PREVENIR RENDERIZAÇÃO - Não deixa a view ser carregada
+                    app.state.currentView = 'classroom'; // Set view state
+                    app.state.pendingClassroomId = param; // Save classroom code
+
+                    // Clear any existing content to prevent flash
                     const main = document.getElementById('app');
                     if (main) main.innerHTML = '';
+
+                    // Show modal WITHOUT rendering classroom view
                     app.showJoinClassroomModal(param);
+
+                    // ✅ EARLY RETURN - Para aqui, não continua o fluxo de navegação
                     return;
                 }
+
                 // Logged in user (or confirmed Guest) - proceed to classroom
                 console.log('[NAVIGATE] User logged in/confirmed, joining classroom...');
                 app.state.currentView = view; // FIX: Update state before joining
@@ -384,21 +393,7 @@ function initializeApp() {
             }
 
             // 4. Guest Guard (Global)
-            if (role === 'guest' && view !== 'login' && view !== 'register') {
-                console.log('[NAVIGATE DEBUG] Guest trying to access protected view:', view);
-                app.showToast('Faça login para continuar.');
-                view = 'login';
-            }
-
-            // 4. Guest Guard (Global)
-            if (role === 'guest' && view !== 'login' && view !== 'register') {
-                console.log('[NAVIGATE DEBUG] Guest trying to access protected view:', view);
-                app.showToast('Faça login para continuar.');
-                view = 'login';
-            }
-
-            // 4. Guest Guard (Global)
-            if (role === 'guest' && view !== 'login' && view !== 'register') {
+            if (role === 'guest' && view !== 'login' && view !== 'register' && view !== 'classroom' && view !== 'home' && view !== 'cifra') {
                 console.log('[NAVIGATE DEBUG] Guest trying to access protected view:', view);
                 app.showToast('Faça login para continuar.');
                 view = 'login';
@@ -1554,10 +1549,7 @@ function initializeApp() {
             }
         },
 
-        joinAsGuest: () => {
-            // Wrapper para o botão do modal
-            app.joinClassroom(null, 'guest');
-        },
+
 
         // --- FIRESTORE OPERATIONS ---
 
@@ -3999,14 +3991,25 @@ function initializeApp() {
                 isGuest: true
             };
 
+            // ✅ Permitir passagem pela verificação de segurança
+            app.state.justJoined = true;
+
             // Persist guest name for convenience
             localStorage.setItem('guestName', guestName);
 
+            // Persist session if needed (optional)
+            localStorage.setItem('guest_session', JSON.stringify(app.state.user));
+
             app.hideJoinClassroomModal();
-            app.hideJoinClassroomModal();
-            // Store the classroom ID to redirect after login
-            localStorage.setItem('pendingClassroom', app.state.pendingClassroomId);
-            app.navigate('login');
+
+            // Navigate to pending classroom OR home
+            if (app.state.pendingClassroomId) {
+                console.log('[JOIN] Navegando para sala:', app.state.pendingClassroomId);
+                app.navigate('classroom', app.state.pendingClassroomId);
+            } else {
+                console.warn('[JOIN] Nenhuma sala pendente, indo para home.');
+                app.navigate('home');
+            }
         },
 
         joinClassroom: async (classroomId, userType) => {

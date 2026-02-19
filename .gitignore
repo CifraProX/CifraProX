@@ -10,3 +10,6 @@ api/
 !manifest.json
 serviceAccountKey.json
 cifraprox-*.json
+
+# Logs
+firebase-debug.log

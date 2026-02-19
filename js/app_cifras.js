@@ -63,6 +63,66 @@ app.loadCifra = async (id) => {
     }
 };
 
+// NEW: Load Cifras List for Home
+app.loadCifras = async (containerId) => {
+    console.log('[CIFRAS] Loading list for container:', containerId);
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    if (!app.state.user) {
+        container.innerHTML = '<p class="text-slate-500">Faça login para ver suas cifras.</p>';
+        return;
+    }
+
+    try {
+        container.innerHTML = '<div class="text-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500 mx-auto"></div></div>';
+
+        const snapshot = await app.db.collection('cifras')
+            .where('ownerId', '==', app.state.user.uid)
+            .orderBy('createdAt', 'desc')
+            .limit(20)
+            .get();
+
+        if (snapshot.empty) {
+            container.innerHTML = `
+                <div class="text-center py-12 bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700">
+                    <span class="material-icons-round text-4xl text-slate-300 mb-2">library_music</span>
+                    <p class="text-slate-500">Nenhuma cifra encontrada.</p>
+                    <button onclick="app.navigate('editor')" class="mt-4 text-emerald-500 font-bold hover:underline">
+                        Criar primeira cifra
+                    </button>
+                </div>
+            `;
+            return;
+        }
+
+        let html = '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">';
+        snapshot.forEach(doc => {
+            const c = doc.data();
+            html += `
+                <div onclick="app.navigate('cifra', '${doc.id}')" 
+                     class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 hover:shadow-md hover:border-emerald-500 transition-all cursor-pointer group">
+                    <div class="flex justify-between items-start mb-2">
+                        <h3 class="font-bold text-slate-800 dark:text-white truncate pr-2 group-hover:text-emerald-500 transition-colors">${c.title}</h3>
+                        <span class="text-xs font-bold bg-slate-100 dark:bg-slate-700 text-slate-500 px-2 py-1 rounded-lg">${c.tom || '?'}</span>
+                    </div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mb-3">${c.artist}</p>
+                    <div class="flex items-center justify-between text-xs text-slate-400">
+                        <span>Editado ha instantes</span>
+                        <span class="material-icons-round text-sm opacity-0 group-hover:opacity-100 transition-opacity text-emerald-500">arrow_forward</span>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+
+    } catch (e) {
+        console.error('Error loading cifras:', e);
+        container.innerHTML = '<p class="text-red-500">Erro ao carregar cifras.</p>';
+    }
+};
+
 app.renderContent = () => {
     const data = app.state.currentCifra;
     if (!data) return;

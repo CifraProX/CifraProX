@@ -102,7 +102,7 @@ app.renderSchoolDashboard = (classrooms) => {
     const activeRooms = classrooms.filter(c => c.status === 'active').length;
     const totalStudents = classrooms.reduce((acc, c) => acc + (c.participantsCount || 0), 0);
     // Mock random attendance between 70% and 95%
-    const avgAttendance = Math.floor(Math.random() * (98 - 75 + 1) + 75);
+    const avgAttendance = 0; // Fixed to 0 to remove false data
 
     // Update Metrics DOM
     const elActive = document.getElementById('metric-active-rooms');
@@ -118,11 +118,11 @@ app.renderSchoolDashboard = (classrooms) => {
     // Mock Next Class
     if (elNextClass) {
         if (activeRooms > 0) {
-            const randomClass = classrooms.find(c => c.status === 'active') || classrooms[0];
-            elNextClass.textContent = randomClass.name;
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            elNextTime.textContent = `Amanhã, ${['14:00', '16:00', '19:00'][Math.floor(Math.random() * 3)]}`;
+            // const randomClass = classrooms.find(c => c.status === 'active') || classrooms[0];
+            elNextClass.textContent = 'Nenhuma aula agendada'; // Removed random class selection
+            // const tomorrow = new Date();
+            // tomorrow.setDate(tomorrow.getDate() + 1);
+            elNextTime.textContent = '--'; // Removed random time
         } else {
             elNextClass.textContent = 'Nenhuma aula agendada';
             elNextTime.textContent = '--';
@@ -155,9 +155,9 @@ app.renderClassroomGrid = (classrooms) => {
         const statusLabel = isActive ? 'Ativa' : 'Arquivada';
 
         // Mock Level and Progress
-        const level = ['Iniciante', 'Intermediário', 'Avançado'][Math.floor(Math.random() * 3)];
+        const level = c.level || 'Iniciante'; // Removed random selection
         const levelColor = level === 'Iniciante' ? 'text-blue-500' : (level === 'Intermediário' ? 'text-orange-500' : 'text-purple-500');
-        const progress = Math.floor(Math.random() * 100);
+        const progress = c.progress || 0; // Removed random progress
 
         const card = document.createElement('div');
         card.className = 'bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-lg transition-all group flex flex-col h-full relative overflow-hidden';
@@ -213,7 +213,7 @@ app.renderClassroomGrid = (classrooms) => {
             </div>
 
                 <div class="flex gap-2">
-                    <button onclick="app.openClassroomManagement('${c.code}')" 
+                    <button onclick="app.navigate('classroom', '${c.code}')" 
                         class="flex-1 bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-white py-2 rounded-xl font-bold transition-colors">
                         Gerenciar
                     </button>
@@ -229,6 +229,11 @@ app.renderClassroomGrid = (classrooms) => {
                         <span class="material-icons-round">block</span>
                     </button>
                     ` : ''}
+                    
+                    <button onclick="app.deleteClassroom('${c.code}')" title="Excluir Sala"
+                        class="px-3 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-xl transition-colors">
+                        <span class="material-icons-round">delete</span>
+                    </button>
                 </div>
         `;
         container.appendChild(card);
@@ -251,6 +256,7 @@ app.filterClassrooms = (query) => {
 app.showCreateClassroomModal = () => {
     const modal = document.getElementById('create-classroom-modal');
     if (modal) {
+        modal.classList.add('active'); // Add active class
         modal.classList.remove('pointer-events-none', 'opacity-0');
         modal.classList.add('pointer-events-auto', 'opacity-100');
         const input = document.getElementById('new-classroom-name');
@@ -261,6 +267,7 @@ app.showCreateClassroomModal = () => {
 app.hideCreateClassroomModal = () => {
     const modal = document.getElementById('create-classroom-modal');
     if (modal) {
+        modal.classList.remove('active'); // Ensure active is removed
         modal.classList.add('pointer-events-none', 'opacity-0');
         modal.classList.remove('pointer-events-auto', 'opacity-100');
     }
@@ -432,6 +439,29 @@ app.joinClassroom = async (codeOverride = null, mode = 'guest') => {
         } else {
             if (app.loadClassroom) app.loadClassroom(code);
         }
+
+        // --- REGISTRAR PRESENÇA NO FIRESTORE ---
+        try {
+            const user = app.state.user || { name: guestName, uid: 'guest_' + Date.now() };
+            const participantRef = app.db.collection('classrooms').doc(code).collection('participants').doc(user.uid);
+
+            await participantRef.set({
+                name: user.name,
+                uid: user.uid,
+                status: 'online',
+                role: user.role || 'guest',
+                joinedAt: new Date(),
+                lastActive: new Date()
+            }, { merge: true });
+
+            console.log('[JOIN] Presença registrada para:', user.name);
+
+            // Setup Disconnect Cleanup (if possible with Firestore, mostly manual on leave)
+            // window.addEventListener('beforeunload', () => { ... }); 
+
+        } catch (err) {
+            console.error('[JOIN] Erro ao registrar presença:', err);
+        }
     } finally {
         if (btn) {
             btn.innerText = 'Entrar na Aula';
@@ -443,6 +473,10 @@ app.joinClassroom = async (codeOverride = null, mode = 'guest') => {
 // New Join Guard Logic
 app.showJoinClassroomModal = (classroomId) => {
     app.state.pendingClassroomId = classroomId;
+
+    // ✅ OCULTAR O APP (Prevenir Fantasmas)
+    document.body.classList.add('app-hidden');
+
     const modal = document.getElementById('join-classroom-modal');
     if (modal) {
         modal.classList.add('active');
@@ -453,6 +487,9 @@ app.showJoinClassroomModal = (classroomId) => {
 };
 
 app.hideJoinClassroomModal = () => {
+    // ✅ MOSTRAR O APP
+    document.body.classList.remove('app-hidden');
+
     const modal = document.getElementById('join-classroom-modal');
     if (modal) {
         modal.classList.remove('active');
@@ -481,8 +518,7 @@ app.joinAsGuest = async () => {
 
     app.hideJoinClassroomModal();
 
-    // Flag to bypass Navigate Guard
-    app.state.justJoined = true;
+
 
     if (targetClassroom) {
         app.navigate('classroom', targetClassroom);
@@ -561,8 +597,14 @@ app.renderClassroomTabs = (activeTab = 'overview') => {
     tabsContainer.innerHTML = tabs.map(tab => {
         const isActive = tab.id === activeTab;
         const bg = isActive ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300';
+
+        // Special handling for 'overview' tab - navigate to classroom instead
+        const onclick = tab.id === 'overview'
+            ? `app.navigate('classroom', app.state.currentManagementClassroom)`
+            : `app.renderClassroomTabs('${tab.id}')`;
+
         return `
-            <button onclick="app.renderClassroomTabs('${tab.id}')" 
+            <button onclick="${onclick}" 
                 class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${bg}">
                 <span class="material-icons-round text-lg">${tab.icon}</span>
                 ${tab.label}
@@ -587,8 +629,8 @@ app.renderClassroomTabContent = (tabId, container) => {
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                         <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700">
                             <h4 class="text-slate-500 font-bold text-xs uppercase mb-2">Engajamento</h4>
-                            <p class="text-3xl font-bold text-slate-800 dark:text-white">95%</p>
-                            <span class="text-xs text-emerald-500 font-bold">+5% essa semana</span>
+                            <p class="text-3xl font-bold text-slate-800 dark:text-white">--</p>
+                            <span class="text-xs text-slate-400 font-bold">Sem dados recentes</span>
                         </div>
                         <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700">
                             <h4 class="text-slate-500 font-bold text-xs uppercase mb-2">Alunos Ativos</h4>
@@ -596,17 +638,12 @@ app.renderClassroomTabContent = (tabId, container) => {
                         </div>
                         <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700">
                             <h4 class="text-slate-500 font-bold text-xs uppercase mb-2">Conteúdos</h4>
-                            <p class="text-3xl font-bold text-slate-800 dark:text-white">12</p>
+                            <p class="text-3xl font-bold text-slate-800 dark:text-white">${classroom.contentCount || 0}</p>
                         </div>
                     </div>
                     
                     <div class="flex gap-4">
-                        <button onclick="app.navigate('classroom', '${classroom.code}')" 
-                            class="flex-1 bg-primary hover:bg-primary-dark text-white py-4 rounded-xl font-bold shadow-lg shadow-primary/20 flex items-center justify-center gap-3 transition-all active:scale-95">
-                            <span class="material-icons-round text-2xl">podcasts</span>
-                            Iniciar Aula Ao Vivo
-                        </button>
-                         <button 
+                         <button onclick="app.copyClassroomLink('${classroom.code}')"
                             class="flex-1 bg-white dark:bg-slate-800 hover:bg-slate-50 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-white py-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-all">
                             <span class="material-icons-round text-2xl">share</span>
                             Convidar Alunos
@@ -712,6 +749,28 @@ app.loadClassroom = async (classroomId) => {
         classroom = app.state.mockClassrooms.find(c => c.code === classroomId);
     }
 
+    // Try to fetch/merge from Real DB
+    try {
+        const doc = await app.db.collection('classrooms').doc(classroomId).get();
+        if (doc.exists) {
+            const dbData = doc.data();
+            if (classroom) {
+                classroom = { ...classroom, ...dbData };
+            } else {
+                classroom = { ...dbData, code: doc.id };
+            }
+            // Explicitly set active cifra if present in DB
+            if (classroom.activeCifra) {
+                app.state.currentLiveCifra = classroom.activeCifra;
+            }
+        }
+    } catch (e) {
+        console.warn("Could not fetch real classroom data:", e);
+    }
+
+    // --- REGISTER PRESENCE ---
+    app.registerPresence(classroomId);
+
     // --- FIX: LOADING STATE GUARD ---
     // If user is null but we have a token, we are likely restoring session.
     // Don't show "Student/Guest" view yet. Show Loading.
@@ -736,11 +795,10 @@ app.loadClassroom = async (classroomId) => {
     const currentUser = app.state.user || { uid: 'guest', role: 'guest' };
 
     // Fix for F5/Reload: If classroom is owned by 'mock_user' and we are logged in, assume ownership (for demo)
-    // FIX: Strict check. Only the actual owner sees Teacher View.
-    // Guests AND unconnected Teachers see Student View for MOCK rooms.
+    // Teachers (authenticated, non-guest) can manage mock rooms
     const isOwner = classroom && (
-        classroom.ownerId === currentUser.uid
-        // REMOVED: || (classroom.ownerId === 'mock_user' && currentUser.role !== 'guest')
+        classroom.ownerId === currentUser.uid ||
+        (classroom.ownerId === 'mock_user' && currentUser.role !== 'guest' && !currentUser.isGuest)
     );
 
     // UI References
@@ -759,19 +817,17 @@ app.loadClassroom = async (classroomId) => {
         if (teacherArea) teacherArea.classList.remove('hidden');
         if (studentArea) studentArea.classList.add('hidden');
         app.renderClassroomRepertoire(); // Load Music List (Editable)
+        app.renderClassroomParticipants(); // Render Participants for Teacher
     } else {
         // STUDENT / GUEST VIEW
         if (teacherArea) teacherArea.classList.add('hidden');
         if (studentArea) studentArea.classList.remove('hidden');
 
-        // Render Repertoire (Read-Only)
-        app.renderClassroomRepertoire();
-
-        // Guest Banner Logic
+        // Guest Banner Logic - Insert BEFORE student area, not inside
         const banner = document.getElementById('guest-signup-banner');
         if (currentUser.isGuest) {
             if (!banner) {
-                // Inject Banner if missing
+                // Inject Banner before student area
                 const bannerHTML = `
                 <div id="guest-signup-banner" class="bg-indigo-600 text-white p-4 rounded-xl shadow-lg mb-6 flex items-center justify-between">
                     <div class="flex items-center gap-3">
@@ -787,7 +843,7 @@ app.loadClassroom = async (classroomId) => {
                         Criar Conta
                     </button>
                 </div>`;
-                studentArea.insertAdjacentHTML('afterbegin', bannerHTML);
+                studentArea.insertAdjacentHTML('beforebegin', bannerHTML);
             }
         } else {
             // Remove banner if present (e.g. after login)
@@ -795,39 +851,92 @@ app.loadClassroom = async (classroomId) => {
         }
     }
 
-    // 3. Render Participants (Mock)
-    app.renderClassroomParticipants();
+    // 4. Update Live State (if any)
+    app.updateClassroomLiveState();
 };
 
-app.renderClassroomRepertoire = () => {
+app.renderClassroomRepertoire = async () => {
     const list = document.getElementById('classroom-music-list');
     if (!list) return;
 
-    // Mock Repertoire
-    const songs = [
-        { id: 1, title: 'Hotel California', artist: 'Eagles' },
-        { id: 2, title: 'Tempo Perdido', artist: 'Legião Urbana' },
-        { id: 3, title: 'Sozinho', artist: 'Caetano Veloso' },
-        { id: 4, title: 'Ai Se Eu Te Pego', artist: 'Michel Teló' },
-        { id: 5, title: 'Pais e Filhos', artist: 'Legião Urbana' }
-    ];
+    list.innerHTML = '<div class="text-center py-12 text-slate-400"><span class="material-icons-round animate-spin">sync</span> Carregando repertório...</div>';
 
-    list.innerHTML = songs.map(song => `
-        <div class="flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-lg group cursor-pointer transition-colors border-b border-slate-50 dark:border-slate-800 last:border-0">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 bg-primary/10 text-primary rounded-lg flex items-center justify-center font-bold text-sm">
-                    ${song.title.charAt(0)}
+    try {
+        // Fetch Real Cifras for Repertoire
+        // For now, fetching ALL cifras. In future, fetch only classroom repertoire.
+        const snapshot = await app.db.collection('cifras').orderBy('title').get();
+        const songs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        if (songs.length === 0) {
+            list.innerHTML = '<div class="text-center py-12 text-slate-400">Nenhuma cifra encontrada.</div>';
+            return;
+        }
+
+        list.innerHTML = songs.map(song => `
+            <div onclick="app.selectCifraFromList('${song.id}')" 
+                class="flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-lg group cursor-pointer transition-colors border-b border-slate-50 dark:border-slate-800 last:border-0 relative">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-primary/10 text-primary rounded-lg flex items-center justify-center font-bold text-sm">
+                        ${song.title.charAt(0)}
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-sm text-slate-800 dark:text-white group-hover:text-primary transition-colors line-clamp-1">${song.title}</h4>
+                        <p class="text-xs text-slate-500 line-clamp-1">${song.artist}</p>
+                    </div>
                 </div>
-                <div>
-                    <h4 class="font-bold text-sm text-slate-800 dark:text-white group-hover:text-primary transition-colors">${song.title}</h4>
-                    <p class="text-xs text-slate-500">${song.artist}</p>
-                </div>
+                <button class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-emerald-500 hover:text-white text-slate-400 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 shadow-sm">
+                    <span class="material-icons-round text-sm">play_arrow</span>
+                </button>
             </div>
-            <button class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-primary hover:text-white text-slate-400 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100">
-                <span class="material-icons-round text-sm">play_arrow</span>
-            </button>
-        </div>
-    `).join('');
+        `).join('');
+
+        // Provide Search Logic
+        const searchInput = document.querySelector('#classroom-teacher-area input[type="text"]');
+        if (searchInput) {
+            searchInput.onkeyup = (e) => {
+                const term = e.target.value.toLowerCase();
+                const items = list.querySelectorAll('div[onclick]');
+                items.forEach(item => {
+                    const text = item.innerText.toLowerCase();
+                    item.style.display = text.includes(term) ? 'flex' : 'none';
+                });
+            };
+        }
+
+    } catch (e) {
+        console.error("Error loading repertoire:", e);
+        list.innerHTML = '<div class="text-center py-12 text-red-400">Erro ao carregar repertório.</div>';
+    }
+};
+
+app.selectCifraFromList = async (cifraId) => {
+    try {
+        const doc = await app.db.collection('cifras').doc(cifraId).get();
+        if (!doc.exists) return;
+        const cifra = { id: doc.id, ...doc.data() };
+
+        // Update Local State
+        app.state.currentLiveCifra = cifra;
+        app.updateClassroomLiveState();
+
+        // Update Backend
+        if (app.state.currentClassroomCode) {
+            await app.db.collection('classrooms').doc(app.state.currentClassroomCode).set({
+                activeCifra: {
+                    id: cifra.id,
+                    title: cifra.title,
+                    artist: cifra.artist
+                },
+                status: 'live',
+                updatedAt: new Date()
+            }, { merge: true });
+
+            app.showToast(`Tocando: ${cifra.title}`);
+        }
+    } catch (e) {
+        console.error("Error selecting cifra:", e);
+        app.showToast("Erro ao selecionar cifra.");
+    }
 };
 
 app.renderClassroomParticipants = () => {
@@ -835,24 +944,178 @@ app.renderClassroomParticipants = () => {
     const countLabel = document.getElementById('label-participants-count');
     if (!list) return;
 
-    // Mock Participants
-    const students = [
-        { name: 'João Silva', status: 'online' },
-        { name: 'Maria Souza', status: 'online' },
-        { name: 'Pedro Santos', status: 'idle' }
-    ];
+    // Clear previous listener
+    if (app.state.unsubs.participants) {
+        app.state.unsubs.participants();
+        app.state.unsubs.participants = null;
+    }
 
-    if (countLabel) countLabel.innerText = students.length;
+    const classroomId = app.state.currentClassroomCode;
+    console.log('[PARTICIPANTS] Listening to:', classroomId);
 
-    list.innerHTML = students.map(s => `
-        <li class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/30 rounded-xl">
-            <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-400 to-blue-600 flex items-center justify-center text-white text-xs font-bold">
-                    ${s.name.charAt(0)}
-                </div>
-                <span class="text-sm font-medium text-slate-700 dark:text-slate-300">${s.name}</span>
+    // Listen to Participants Subcollection
+    app.state.unsubs.participants = app.db.collection('classrooms').doc(classroomId)
+        .collection('participants')
+        .onSnapshot(snapshot => {
+            const students = [];
+            snapshot.forEach(doc => {
+                students.push(doc.data());
+            });
+
+            console.log('[PARTICIPANTS] Updated:', students.length);
+
+            if (countLabel) countLabel.innerText = students.length;
+
+            if (students.length === 0) {
+                list.innerHTML = '<li class="text-center text-slate-400 py-4 text-sm">Nenhum aluno conectado.</li>';
+                return;
+            }
+
+            list.innerHTML = students.map(s => `
+                <li class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/30 rounded-xl">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-400 to-blue-600 flex items-center justify-center text-white text-xs font-bold">
+                            ${s.name.charAt(0).toUpperCase()}
+                        </div>
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">${s.name}</span>
+                    </div>
+                    <span class="w-2 h-2 rounded-full ${s.status === 'online' ? 'bg-green-500' : 'bg-amber-500'}"></span>
+                </li>
+            `).join('');
+        }, error => {
+            console.error('[PARTICIPANTS] Listener Error:', error);
+            list.innerHTML = '<li class="text-center text-red-400 py-4 text-xs">Erro ao sincronizar.</li>';
+        });
+};
+
+
+
+app.updateClassroomLiveState = () => {
+    const cifra = app.state.currentLiveCifra;
+    if (!cifra) return;
+
+    // 1. Update Teacher "Now Playing"
+    const npActive = document.getElementById('now-playing-active');
+    const npContent = document.getElementById('now-playing-content');
+    const npTitle = document.getElementById('np-title');
+    const npArtist = document.getElementById('np-artist');
+
+    if (npActive && npContent && npTitle && npArtist) {
+        npContent.classList.add('hidden');
+        npActive.classList.remove('hidden');
+        npTitle.innerText = cifra.title;
+        npArtist.innerText = cifra.artist;
+
+        // Update "Open Cifra" button to use correct ID
+        const btn = npActive.querySelector('button[onclick*="navigate"]');
+        if (btn) btn.setAttribute('onclick', `app.navigate('cifra', '${cifra.id}')`);
+    }
+
+    // 2. Update Student View
+    const studentCifraContent = document.getElementById('student-cifra-content');
+    if (studentCifraContent) {
+        studentCifraContent.innerHTML = `
+            <div class="bg-white dark:bg-slate-800 p-8 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl text-center relative overflow-hidden min-h-[500px] flex flex-col justify-center">
+                <div class="absolute inset-0 bg-gradient-to-tr from-primary/5 to-transparent pointer-events-none"></div>
+                
+                <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 text-xs font-bold uppercase tracking-wider mb-6 animate-pulse mx-auto">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Ao Vivo
+                </span>
+                
+                <h1 class="text-3xl md:text-4xl font-display font-bold text-slate-800 dark:text-white mb-2 leading-tight">${cifra.title}</h1>
+                <h2 class="text-xl text-slate-500 dark:text-slate-400 font-medium mb-10">${cifra.artist}</h2>
+                
+                <button onclick="app.navigate('cifra', '${cifra.id}')" 
+                    class="w-full sm:w-auto bg-primary hover:bg-primary-dark text-white px-8 py-4 rounded-xl font-bold shadow-lg shadow-primary/20 transition-all active:scale-95 text-lg flex items-center justify-center gap-2 mx-auto">
+                    <span class="material-icons-round">lyrics</span>
+                    Acompanhar Cifra
+                </button>
+                
+                <p class="text-xs text-slate-400 mt-6 pt-6 border-t border-slate-100 dark:border-slate-700/50">
+                    O professor definiu esta música como ativa.
+                </p>
             </div>
-            <span class="w-2 h-2 rounded-full ${s.status === 'online' ? 'bg-green-500' : 'bg-amber-500'}"></span>
-        </li>
-    `).join('');
+        `;
+    }
+
+    // 3. Populate Student Participants List
+    const studentParticipantsList = document.getElementById('classroom-students-list-student');
+    const studentParticipantsCount = document.getElementById('label-participants-count-student');
+
+    if (studentParticipantsList) {
+        // Mock Participants (same as teacher view) - TODO: Realtime
+        const students = [
+            { name: 'João Silva', status: 'online' },
+            { name: 'Maria Souza', status: 'online' },
+            { name: 'Pedro Santos', status: 'idle' }
+        ];
+
+        if (studentParticipantsCount) studentParticipantsCount.innerText = students.length;
+
+        studentParticipantsList.innerHTML = students.map(s => `
+            <li class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/30 rounded-xl">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-400 to-blue-600 flex items-center justify-center text-white text-xs font-bold">
+                        ${s.name.charAt(0)}
+                    </div>
+                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">${s.name}</span>
+                </div>
+                <span class="w-2 h-2 rounded-full ${s.status === 'online' ? 'bg-green-500' : 'bg-amber-500'}"></span>
+            </li>
+        `).join('');
+    }
+};
+
+// --- PRESENCE SYSTEM ---
+app.registerPresence = async (classroomId) => {
+    // If no user AND no guestName stored, we can't register presence
+    if (!app.state.user && !localStorage.getItem('guestName')) return;
+
+    try {
+        let user = app.state.user;
+
+        // Se ainda não tem user state mas tem guestName (reload), tenta reconstruir ou espera auth
+        if (!user) {
+            const guestName = localStorage.getItem('guestName');
+            if (guestName) {
+                user = {
+                    name: guestName,
+                    uid: 'guest_' + (localStorage.getItem('guest_uid') || Date.now()),
+                    role: 'guest'
+                };
+                // Persist provisional UID if not exists
+                if (!localStorage.getItem('guest_uid')) {
+                    // Extract numeric part if possible or keep as is
+                    localStorage.setItem('guest_uid', user.uid.replace('guest_', ''));
+                }
+            } else {
+                return; // No user identity
+            }
+        }
+
+        const participantRef = app.db.collection('classrooms').doc(classroomId).collection('participants').doc(user.uid);
+
+        await participantRef.set({
+            name: user.name || 'Usuário',
+            uid: user.uid,
+            status: 'online',
+            role: user.role || 'student',
+            avatar: user.photoURL || null,
+            email: user.email || null,
+            joinedAt: new Date(),
+            lastActive: new Date()
+        }, { merge: true });
+
+        console.log('[PRESENCE] Registered for:', user.name);
+
+        // Simple Online/Offline Mechanism
+        // Note: For robust presence, Realtime Database is better, but this works for basic status
+        window.addEventListener('beforeunload', () => {
+            // Best effort attempt to set offline
+            participantRef.update({ status: 'offline', lastActive: new Date() }).catch(() => { });
+        });
+
+    } catch (err) {
+        console.error('[PRESENCE] Error registering:', err);
+    }
 };

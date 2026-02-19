@@ -112,7 +112,11 @@ window.app = {
         }
 
         // 4. Auth Listener
+        app.state.authChecked = false; // Initialize flag
+
         app.auth.onAuthStateChanged(async (user) => {
+            app.state.authChecked = true; // Mark enabled
+
             if (user) {
                 console.log('User logged in:', user.uid);
 
@@ -134,6 +138,12 @@ window.app = {
                 } catch (e) {
                     console.error("Error fetching user data:", e);
                     app.state.user = { uid: user.uid, email: user.email };
+                }
+
+                // FORCE ADMIN for master account (Replicate logic from app_auth.js)
+                if (user.email === 'cifraprox@gmail.com') {
+                    console.log('[CORE] Superusuário detectado (cifraprox@gmail.com). Forçando role: admin');
+                    if (app.state.user) app.state.user.role = 'admin';
                 }
 
                 app.updateHeader();
@@ -197,6 +207,11 @@ window.app = {
 
                 app.updateHeader();
             }
+            app.updateHeader();
+
+            // CRITICAL: Force Re-Navigation after Auth Check
+            // This unblocks the "Waiting" spinner if navigate() was paused
+            app.handleHashChange();
         });
 
         // 3. Router / Navigation
@@ -210,10 +225,7 @@ window.app = {
         });
 
         // 4. Initial Load
-        app.handleHashChange();
-
-        // 5. Global Event Listeners (e.g., input masks)
-        // (Add if needed)
+        // app.handleHashChange(); // REMOVED: Called by Auth Listener now
     },
 
     handleHashChange: () => {
@@ -243,8 +255,41 @@ window.app = {
         const protectedViews = ['school', 'admin', 'profile'];
         if (protectedViews.includes(view) && !app.state.user) {
             console.log('[NAVIGATE] Protected view, redirecting to login...');
-            app.navigate('login', null, false); // Redirect, replace history?
+            app.navigate('login', null, false);
             return;
+        }
+
+        // Admin Guard
+        if (view === 'admin' && app.state.user && app.state.user.role !== 'admin') {
+            app.showToast('Acesso negado.');
+            app.navigate('home', null, false);
+            return;
+        }
+
+        // GUEST STRICT GUARD (New)
+        if (app.state.user && app.state.user.isGuest) {
+            const allowedViews = ['classroom', 'cifra'];
+            if (!allowedViews.includes(view)) {
+                // ...
+            }
+        }
+
+        if (view === 'classroom') {
+            const hasUser = !!app.state.user;
+
+            // CRITICAL FIX: If Auth is still loading (initial refresh), DO NOT BLOCK YET.
+            // Wait for onAuthStateChanged to fire.
+            if (!hasUser && !app.state.authChecked) {
+                console.log('[NAVIGATE] Auth not checked yet. Waiting...');
+
+                // SAVE PENDING PARAM FOR RETRY
+                if (param) app.state.pendingClassroomId = param;
+
+                // Show Loading State temporarily
+                const main = document.getElementById('app');
+                main.innerHTML = '<div class="flex items-center justify-center h-screen"><div class="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500"></div></div>';
+                return;
+            }
         }
 
         // Admin Guard
@@ -311,8 +356,21 @@ window.app = {
 
             case 'classroom':
                 // FIX: Intercept Unauthenticated Access
-                if (!app.state.user && !app.state.user?.isGuest) {
-                    console.log('[NAVIGATE] Classroom access intercepted. User not logged in.');
+                // Allow both Logged Users AND Guests
+                const hasUser = !!app.state.user;
+
+                // CRITICAL FIX: If Auth is still loading (initial refresh), DO NOT BLOCK YET.
+                // Wait for onAuthStateChanged to fire.
+                if (!hasUser && !app.state.authChecked) {
+                    console.log('[NAVIGATE] Auth not checked yet. Waiting...');
+                    // Show Loading State temporarily
+                    const main = document.getElementById('app');
+                    main.innerHTML = '<div class="flex items-center justify-center h-screen"><div class="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500"></div></div>';
+                    return;
+                }
+
+                if (!hasUser) {
+                    console.log('[NAVIGATE] Classroom access intercepted. No user session.');
                     if (param) {
                         app.showJoinClassroomModal(param);
                     } else {
@@ -323,6 +381,7 @@ window.app = {
                 }
 
                 if (param) app.loadClassroom(param); // Defined in app_classroom.js
+                break;
                 break;
 
             case 'admin':
@@ -402,8 +461,10 @@ window.app = {
         // 3. Student vs Teacher Control
         if (user && user.role === 'student' && !user.isGuest) {
             if (btnNewClassroom) btnNewClassroom.classList.add('hidden');
+            if (schoolLink) schoolLink.classList.add('hidden'); // NEW RULE: Students don't see "My Schools/Classrooms" menu
         } else if (user && (user.role === 'teacher' || user.role === 'admin' || user.role === 'school')) {
             if (btnNewClassroom) btnNewClassroom.classList.remove('hidden');
+            if (schoolLink) schoolLink.classList.remove('hidden'); // Ensure visible for teachers
         }
     }
 };

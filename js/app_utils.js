@@ -40,6 +40,7 @@ app.modal = ({ title, content, input = false, confirmText = 'OK', cancelText = '
 
         requestAnimationFrame(() => {
             document.body.classList.add('modal-active');
+            modalEl.classList.add('active'); // Add active class for scoped CSS
             if (typeof onShow === 'function') onShow(id);
         });
 
